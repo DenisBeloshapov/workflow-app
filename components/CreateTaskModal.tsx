@@ -60,7 +60,7 @@ export default function CreateTaskModal() {
 
     await supabase.from('tasks').insert(tasksToInsert)
 
-    location.reload()
+  
   }
 
   return (
