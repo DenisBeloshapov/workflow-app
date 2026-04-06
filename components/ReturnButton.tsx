@@ -54,8 +54,6 @@ export default function ReturnButton({ task }: { task: any }) {
       setLoading(false)
       return
     }
-
-    location.reload()
   }
 
   return (
