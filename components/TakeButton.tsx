@@ -28,8 +28,6 @@ export default function TakeButton({ taskId }: { taskId: string }) {
       console.log(error)
       return
     }
-
-    location.reload()
   }
 
   return (
