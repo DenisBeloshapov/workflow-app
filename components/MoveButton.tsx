@@ -18,7 +18,7 @@ export default function MoveButton({
       .update({ status })
       .eq('id', taskId)
 
-    location.reload()
+    
   }
 
   return (
