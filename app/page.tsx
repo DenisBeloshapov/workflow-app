@@ -19,13 +19,26 @@ export default function Page() {
   useEffect(() => {
   setMounted(true)
 
-  supabase.auth.getUser().then(({ data }) => {
-    if (!data.user) {
-      window.location.href = '/login'
-    } else {
-      fetchTasks()
-    }
-  })
+  fetchTasks()
+
+  const channel = supabase
+    .channel('tasks-realtime')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'tasks',
+      },
+      () => {
+        fetchTasks() // обновляем список
+      }
+    )
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
 }, [])
 
   const fetchTasks = async () => {
