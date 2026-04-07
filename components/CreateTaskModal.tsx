@@ -16,6 +16,21 @@ export default function CreateTaskModal() {
   // REGISTRATION
   const [bulkText, setBulkText] = useState('')
 
+  // PAYMENT
+  const [clients, setClients] = useState([
+    { text: '', file: null as File | null },
+  ])
+
+  const updateClient = (index: number, field: string, value: any) => {
+    const updated = [...clients]
+    updated[index][field] = value
+    setClients(updated)
+  }
+
+  const addClient = () => {
+    setClients([...clients, { text: '', file: null }])
+  }
+
   const handleCreate = async () => {
     // ===== ОФОРМЛЕНИЕ =====
     if (type === 'registration') {
@@ -36,14 +51,46 @@ export default function CreateTaskModal() {
       }
     }
 
-    // ===== ОПЛАТА (возвращаем старую логику) =====
+    // ===== ОПЛАТА =====
     if (type === 'payment') {
-      await supabase.from('tasks').insert({
-        comment,
-        priority,
-        status: 'created',
-        type: 'payment',
-      })
+      const { data: task } = await supabase
+        .from('tasks')
+        .insert({
+          comment,
+          status: 'created',
+          type: 'payment',
+        })
+        .select()
+        .single()
+
+      if (!task) return
+
+      for (const c of clients) {
+        if (!c.text) continue
+
+        const [body, ...nameParts] = c.text.trim().split(' ')
+        const name = nameParts.join(' ')
+
+        let filePath = null
+
+        if (c.file) {
+          const fileName =
+            Date.now() + '_' + c.file.name.replace(/\s/g, '_')
+
+          await supabase.storage
+            .from('files')
+            .upload('invoices/' + fileName, c.file)
+
+          filePath = fileName
+        }
+
+        await supabase.from('task_items').insert({
+          task_id: task.id,
+          body_number: body,
+          client_name: name,
+          invoice_file: filePath,
+        })
+      }
     }
 
     location.reload()
@@ -55,7 +102,7 @@ export default function CreateTaskModal() {
 
       {open && (
         <div className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center">
-          <div className="relative w-[560px]">
+          <div className="relative w-[580px]">
 
             {/* КРЕСТИК */}
             <button
@@ -65,16 +112,24 @@ export default function CreateTaskModal() {
               <X size={18} />
             </button>
 
-            {/* ===== ВКЛАДКИ (как папка) ===== */}
-            <div className="relative h-[40px]">
+            {/* ===== ВКЛАДКИ ===== */}
+            <div className="relative h-[48px]">
+
               {/* ОФОРМЛЕНИЕ */}
               <div
                 onClick={() => setType('registration')}
                 className={`
-                  absolute left-0 top-0 px-4 py-1 text-sm cursor-pointer
-                  rounded-t-md border
-                  ${type === 'registration' ? 'bg-white z-20' : 'bg-gray-200 z-10'}
+                  absolute left-0 px-5 py-1 text-sm cursor-pointer border
+                  ${type === 'registration'
+                    ? 'top-0 bg-white z-20'
+                    : 'top-2 bg-gray-200 z-10'}
                 `}
+                style={{
+                  borderTopLeftRadius: '10px',
+                  borderTopRightRadius: '10px',
+                  clipPath:
+                    'polygon(0% 100%, 0% 30%, 10% 0%, 90% 0%, 100% 30%, 100% 100%)',
+                }}
               >
                 Оформление
               </div>
@@ -83,10 +138,17 @@ export default function CreateTaskModal() {
               <div
                 onClick={() => setType('payment')}
                 className={`
-                  absolute left-[140px] top-0 px-4 py-1 text-sm cursor-pointer
-                  rounded-t-md border
-                  ${type === 'payment' ? 'bg-white z-20' : 'bg-gray-200 z-10'}
+                  absolute left-[160px] px-5 py-1 text-sm cursor-pointer border
+                  ${type === 'payment'
+                    ? 'top-0 bg-white z-20'
+                    : 'top-2 bg-gray-200 z-10'}
                 `}
+                style={{
+                  borderTopLeftRadius: '10px',
+                  borderTopRightRadius: '10px',
+                  clipPath:
+                    'polygon(0% 100%, 0% 30%, 10% 0%, 90% 0%, 100% 30%, 100% 100%)',
+                }}
               >
                 Оплата
               </div>
@@ -133,32 +195,38 @@ export default function CreateTaskModal() {
               {/* ===== ОПЛАТА ===== */}
               {type === 'payment' && (
                 <>
-                  <div className="text-sm text-gray-500">
-                    Физики добавляются внутри задачи
-                  </div>
+                  {clients.map((c, i) => (
+                    <div key={i} className="space-y-2 border p-3 rounded-lg">
+                      <input
+                        placeholder="WB1234 Иванов Иван"
+                        className="w-full border p-2 rounded"
+                        value={c.text}
+                        onChange={(e) =>
+                          updateClient(i, 'text', e.target.value)
+                        }
+                      />
+
+                      <input
+                        type="file"
+                        onChange={(e) =>
+                          updateClient(i, 'file', e.target.files?.[0] || null)
+                        }
+                      />
+                    </div>
+                  ))}
+
+                  <button
+                    onClick={addClient}
+                    className="text-sm text-[#0131FF]"
+                  >
+                    + Добавить
+                  </button>
 
                   <textarea
                     placeholder="Комментарий"
                     className="w-full border p-2 rounded"
                     onChange={(e) => setComment(e.target.value)}
                   />
-
-                  <div className="flex gap-4 text-sm">
-                    {[
-                      { key: 'high', label: 'Срочно' },
-                      { key: 'medium', label: 'Средняя' },
-                      { key: 'low', label: 'Низкая' },
-                    ].map((p) => (
-                      <label key={p.key} className="flex items-center gap-1">
-                        <input
-                          type="radio"
-                          checked={priority === p.key}
-                          onChange={() => setPriority(p.key)}
-                        />
-                        {p.label}
-                      </label>
-                    ))}
-                  </div>
                 </>
               )}
 
