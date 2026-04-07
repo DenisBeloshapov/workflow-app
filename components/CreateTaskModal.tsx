@@ -15,10 +15,6 @@ export default function CreateTaskModal() {
   // REGISTRATION
   const [bulkText, setBulkText] = useState('')
 
-  // PAYMENT
-  const [paymentList, setPaymentList] = useState('')
-  const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
-
   const handleCreate = async () => {
     // создаем задачу
     const { data: task } = await supabase
