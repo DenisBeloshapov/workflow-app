@@ -118,6 +118,9 @@ export default function Page() {
           👤 {task.assigned_to}
         </div>
       )}
+		{task.type === 'payment' && (
+  <PaymentItems taskId={task.id} />
+)}
 
       {/* 🔥 КНОПКИ */}
       <div className="mt-4 flex gap-3 flex-wrap items-center">
