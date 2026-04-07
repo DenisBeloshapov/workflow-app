@@ -4,11 +4,10 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
 
 export default function CreateTaskModal() {
   const [open, setOpen] = useState(false)
-  const [type, setType] = useState<string | null>(null)
+  const [type, setType] = useState<'registration' | 'payment'>('registration')
 
   // ОБЩЕЕ
   const [comment, setComment] = useState('')
@@ -18,8 +17,6 @@ export default function CreateTaskModal() {
   const [bulkText, setBulkText] = useState('')
 
   const handleCreate = async () => {
-    if (!type) return
-
     // ===== ОФОРМЛЕНИЕ =====
     if (type === 'registration') {
       const lines = bulkText.split('\n').filter(Boolean)
@@ -39,7 +36,7 @@ export default function CreateTaskModal() {
       }
     }
 
-    // ===== ОПЛАТА =====
+    // ===== ОПЛАТА (возвращаем старую логику) =====
     if (type === 'payment') {
       await supabase.from('tasks').insert({
         comment,
@@ -56,82 +53,61 @@ export default function CreateTaskModal() {
     <>
       <Button onClick={() => setOpen(true)}>+ Создать</Button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            {/* МОДАЛКА */}
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="relative bg-[#f8f6f2] text-black p-6 rounded-2xl w-[520px] shadow-2xl"
+      {open && (
+        <div className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center">
+          <div className="relative w-[560px]">
+
+            {/* КРЕСТИК */}
+            <button
+              onClick={() => setOpen(false)}
+              className="absolute right-2 top-2 z-50"
             >
-              {/* КРЕСТИК */}
-              <button
-                onClick={() => {
-                  setOpen(false)
-                  setType(null)
-                }}
-                className="absolute top-4 right-4 opacity-60 hover:opacity-100 transition"
+              <X size={18} />
+            </button>
+
+            {/* ===== ВКЛАДКИ (как папка) ===== */}
+            <div className="relative h-[40px]">
+              {/* ОФОРМЛЕНИЕ */}
+              <div
+                onClick={() => setType('registration')}
+                className={`
+                  absolute left-0 top-0 px-4 py-1 text-sm cursor-pointer
+                  rounded-t-md border
+                  ${type === 'registration' ? 'bg-white z-20' : 'bg-gray-200 z-10'}
+                `}
               >
-                <X size={18} />
-              </button>
+                Оформление
+              </div>
 
-              {/* ===== ВКЛАДКИ ===== */}
-              {!type && (
-                <div className="relative h-[140px]">
+              {/* ОПЛАТА */}
+              <div
+                onClick={() => setType('payment')}
+                className={`
+                  absolute left-[140px] top-0 px-4 py-1 text-sm cursor-pointer
+                  rounded-t-md border
+                  ${type === 'payment' ? 'bg-white z-20' : 'bg-gray-200 z-10'}
+                `}
+              >
+                Оплата
+              </div>
+            </div>
 
-                  {[
-                    { key: 'registration', label: 'Оформление' },
-                    { key: 'payment', label: 'Оплата' },
-                  ].map((tab, i) => (
-                    <motion.div
-                      key={tab.key}
-                      onClick={() => setType(tab.key)}
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: i * 0.05 }}
-                      className={`
-                        absolute top-0 w-[220px] h-[120px]
-                        bg-white rounded-xl shadow-md cursor-pointer
-                        flex items-center justify-center
-                        hover:scale-[1.03] transition
-                      `}
-                      style={{
-                        left: i * 120,
-                        zIndex: 10 - i,
-                      }}
-                    >
-                      {/* ЯЗЫЧОК */}
-                      <div className="absolute -top-3 left-6 bg-white px-3 py-1 text-xs rounded-t-md shadow-sm border">
-                        {tab.label}
-                      </div>
-
-                      <div className="text-3xl opacity-70">📁</div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
+            {/* ===== ОСНОВНАЯ ПАПКА ===== */}
+            <div className="bg-white border rounded-b-xl rounded-tr-xl p-5 space-y-4">
 
               {/* ===== ОФОРМЛЕНИЕ ===== */}
               {type === 'registration' && (
-                <div className="space-y-4 mt-2">
+                <>
                   <textarea
                     placeholder="WB1234 Иванов Иван"
-                    className="w-full border p-2 rounded-lg bg-white"
+                    className="w-full border p-2 rounded"
                     value={bulkText}
                     onChange={(e) => setBulkText(e.target.value)}
                   />
 
                   <textarea
                     placeholder="Комментарий"
-                    className="w-full border p-2 rounded-lg bg-white"
+                    className="w-full border p-2 rounded"
                     onChange={(e) => setComment(e.target.value)}
                   />
 
@@ -151,19 +127,19 @@ export default function CreateTaskModal() {
                       </label>
                     ))}
                   </div>
-                </div>
+                </>
               )}
 
               {/* ===== ОПЛАТА ===== */}
               {type === 'payment' && (
-                <div className="space-y-4 mt-2">
+                <>
                   <div className="text-sm text-gray-500">
                     Физики добавляются внутри задачи
                   </div>
 
                   <textarea
                     placeholder="Комментарий"
-                    className="w-full border p-2 rounded-lg bg-white"
+                    className="w-full border p-2 rounded"
                     onChange={(e) => setComment(e.target.value)}
                   />
 
@@ -183,28 +159,23 @@ export default function CreateTaskModal() {
                       </label>
                     ))}
                   </div>
-                </div>
+                </>
               )}
 
-              {/* ===== КНОПКИ ===== */}
-              {type && (
-                <div className="flex justify-between mt-6">
-                  <Button
-                    variant="outline"
-                    onClick={() => setType(null)}
-                  >
-                    Назад
-                  </Button>
+              {/* КНОПКИ */}
+              <div className="flex justify-between pt-2">
+                <Button variant="outline" onClick={() => setOpen(false)}>
+                  Отмена
+                </Button>
 
-                  <Button onClick={handleCreate}>
-                    Создать
-                  </Button>
-                </div>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                <Button onClick={handleCreate}>
+                  Создать
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
