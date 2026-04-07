@@ -87,8 +87,8 @@ export default function PaymentItems({ taskId }: { taskId: string }) {
             onBlur={(e) => {
               const [body, ...nameParts] =
                 e.target.value.split(' ')
-              updateField(id, 'body_number', body)
-              updateField(id, 'client_name', nameParts.join(' '))
+              updateField(item.id, 'body_number', body)
+              updateField(item.id, 'client_name', nameParts.join(' '))
             }}
             className="w-full p-1 rounded border text-sm"
           />
