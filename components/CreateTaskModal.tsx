@@ -6,61 +6,84 @@ import { Button } from '@/components/ui/button'
 
 export default function CreateTaskModal() {
   const [open, setOpen] = useState(false)
-  const [input, setInput] = useState('')
-  const [comment, setComment] = useState('')
-  const [file, setFile] = useState<File | null>(null)
+  const [type, setType] = useState<string | null>(null)
 
-  const [departments, setDepartments] = useState<string[]>([])
+  // ОБЩЕЕ
+  const [comment, setComment] = useState('')
   const [priority, setPriority] = useState('low')
 
-  const toggle = (value: string) => {
-    setDepartments((prev) =>
-      prev.includes(value)
-        ? prev.filter((v) => v !== value)
-        : [...prev, value]
-    )
-  }
+  // REGISTRATION
+  const [bulkText, setBulkText] = useState('')
+
+  // PAYMENT
+  const [paymentList, setPaymentList] = useState('')
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
 
   const handleCreate = async () => {
-    let filePath = null
+    // создаем задачу
+    const { data: task } = await supabase
+      .from('tasks')
+      .insert({
+        type,
+        comment,
+        priority,
+        status: 'created',
+      })
+      .select()
+      .single()
 
-    if (file) {
-      const fileName = Date.now() + '_' + file.name.replace(/\s/g, '_')
+    if (!task) return
 
-      const { error } = await supabase.storage
-        .from('files')
-        .upload('tasks/' + fileName, file)
+    // ===== REGISTRATION =====
+    if (type === 'registration') {
+      const lines = bulkText.split('\n').filter(Boolean)
 
-      if (error) {
-        alert('Ошибка загрузки')
-        return
+      for (const line of lines) {
+        const [body, ...nameParts] = line.trim().split(' ')
+        const name = nameParts.join(' ')
+
+        await supabase.from('tasks').insert({
+          body_number: body,
+          client_name: name,
+          comment,
+          priority,
+          status: 'created',
+          type: 'registration',
+        })
       }
-
-      filePath = fileName
     }
 
-    // 🔥 массовый парсинг
-    const rows = input.split('\n').map((row) => row.trim()).filter(Boolean)
+    // ===== PAYMENT =====
+    if (type === 'payment') {
+      let filePath = null
 
-    const tasksToInsert = rows.map((row) => {
-      const parts = row.split(' ')
-      const body = parts.shift() || ''
-      const name = parts.join(' ')
+      if (invoiceFile) {
+        const fileName =
+          Date.now() + '_' + invoiceFile.name.replace(/\s/g, '_')
 
-      return {
-        body_number: body,
-        client_name: name,
-        comment,
-        department: departments.join(','),
-        priority,
-        file_url: filePath,
-        status: 'created',
+        await supabase.storage
+          .from('files')
+          .upload('invoices/' + fileName, invoiceFile)
+
+        filePath = fileName
       }
-    })
 
-    await supabase.from('tasks').insert(tasksToInsert)
+      const lines = paymentList.split('\n').filter(Boolean)
 
-  setOpen(false)
+      for (const line of lines) {
+        const [body, ...nameParts] = line.trim().split(' ')
+        const name = nameParts.join(' ')
+
+        await supabase.from('task_items').insert({
+          task_id: task.id,
+          body_number: body,
+          client_name: name,
+          invoice_file: filePath,
+        })
+      }
+    }
+
+    location.reload()
   }
 
   return (
@@ -69,78 +92,100 @@ export default function CreateTaskModal() {
 
       {open && (
         <div className="fixed inset-0 z-[9999] bg-black/30 flex items-center justify-center">
-          <div className="bg-white text-black p-6 rounded-xl w-[420px] space-y-4">
+          <div className="bg-white text-black p-6 rounded-xl w-[500px] space-y-4">
 
-            {/* 🔥 МАССОВОЕ ПОЛЕ */}
-            <textarea
-              placeholder="Кузов ФИО (каждая строка = новая задача)"
-              className="w-full border p-2 rounded bg-white text-black h-[120px]"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-            />
-
-            <div>
-              <div className="text-sm mb-1">Отделы:</div>
-              <div className="flex gap-3">
+            {/* ВЫБОР ТИПА */}
+            {!type && (
+              <div className="flex gap-4">
                 {[
                   { key: 'payment', label: 'Оплата' },
                   { key: 'registration', label: 'Оформление' },
-                  { key: 'passport', label: 'Паспорта' },
-                ].map((dep) => (
-                  <label key={dep.key} className="flex items-center gap-1 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={departments.includes(dep.key)}
-                      onChange={() => toggle(dep.key)}
-                    />
-                    {dep.label}
-                  </label>
+                ].map((item) => (
+                  <div
+                    key={item.key}
+                    onClick={() => setType(item.key)}
+                    className="relative cursor-pointer"
+                  >
+                    <div className="absolute -top-2 left-3 bg-white px-2 text-xs border rounded-t-md">
+                      {item.label}
+                    </div>
+
+                    <div className="w-36 h-24 bg-gray-100 border rounded-xl flex items-center justify-center hover:bg-gray-200 transition">
+                      📁
+                    </div>
+                  </div>
                 ))}
               </div>
-            </div>
+            )}
 
-            <div>
-              <div className="text-sm mb-1">Приоритет:</div>
-              <div className="flex gap-3">
-                {[
-                  { key: 'high', label: 'Срочно' },
-                  { key: 'medium', label: 'Средняя' },
-                  { key: 'low', label: 'Низкая' },
-                ].map((p) => (
-                  <label key={p.key} className="flex items-center gap-1 text-sm">
-                    <input
-                      type="radio"
-                      checked={priority === p.key}
-                      onChange={() => setPriority(p.key)}
-                    />
-                    {p.label}
-                  </label>
-                ))}
+            {/* ===== ОФОРМЛЕНИЕ ===== */}
+            {type === 'registration' && (
+              <>
+                <textarea
+                  placeholder="WB1234 Иванов Иван"
+                  className="w-full border p-2 rounded"
+                  value={bulkText}
+                  onChange={(e) => setBulkText(e.target.value)}
+                />
+
+                <textarea
+                  placeholder="Комментарий"
+                  className="w-full border p-2 rounded"
+                  onChange={(e) => setComment(e.target.value)}
+                />
+
+                <div className="flex gap-3">
+                  {['high', 'medium', 'low'].map((p) => (
+                    <label key={p}>
+                      <input
+                        type="radio"
+                        checked={priority === p}
+                        onChange={() => setPriority(p)}
+                      />{' '}
+                      {p}
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* ===== ОПЛАТА ===== */}
+            {type === 'payment' && (
+              <>
+                <textarea
+                  placeholder="WB1234 Иванов Иван"
+                  className="w-full border p-2 rounded"
+                  value={paymentList}
+                  onChange={(e) => setPaymentList(e.target.value)}
+                />
+
+                <input
+                  type="file"
+                  onChange={(e) =>
+                    setInvoiceFile(e.target.files?.[0] || null)
+                  }
+                />
+
+                <textarea
+                  placeholder="Комментарий"
+                  className="w-full border p-2 rounded"
+                  onChange={(e) => setComment(e.target.value)}
+                />
+              </>
+            )}
+
+            {/* КНОПКИ */}
+            {type && (
+              <div className="flex justify-between">
+                <Button variant="outline" onClick={() => setOpen(false)}>
+                  Отмена
+                </Button>
+
+                <Button onClick={handleCreate}>
+                  Создать
+                </Button>
               </div>
-            </div>
-
-            <textarea
-              placeholder="Комментарий"
-              className="w-full border p-2 rounded bg-white text-black"
-              onChange={(e) => setComment(e.target.value)}
-            />
-
-            <input
-              type="file"
-              className="text-black"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-            />
-
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setOpen(false)}>
-                Отмена
-              </Button>
-
-              <Button onClick={handleCreate}>
-                Создать
-              </Button>
-            </div>
-
+            )}
           </div>
         </div>
       )}
