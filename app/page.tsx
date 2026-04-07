@@ -9,6 +9,7 @@ import { motion } from 'framer-motion'
 import { useTheme } from 'next-themes'
 import Link from 'next/link'
 import ReturnButton from '@/components/ReturnButton'
+import PaymentItems from '@/components/PaymentItems'
 
 export default function Page() {
   const [tasks, setTasks] = useState<any[]>([])
