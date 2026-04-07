@@ -21,7 +21,11 @@ export default function CreateTaskModal() {
     { text: '', file: null as File | null },
   ])
 
-  const updateClient = (index: number, field: string, value: any) => {
+  const updateClient = (
+  index: number,
+  field: 'text' | 'file',
+  value: string | File | null
+) => {
     const updated = [...clients]
     updated[index][field] = value
     setClients(updated)
