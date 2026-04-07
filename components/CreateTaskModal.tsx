@@ -3,42 +3,49 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { X } from 'lucide-react'
-
-type Client = {
-  text: string
-  file: File | null
-}
 
 export default function CreateTaskModal() {
   const [open, setOpen] = useState(false)
-  const [type, setType] = useState<'registration' | 'payment'>('registration')
+  const [type, setType] = useState<string | null>(null)
 
+  // ОБЩЕЕ
   const [comment, setComment] = useState('')
   const [priority, setPriority] = useState('low')
 
+  // REGISTRATION
   const [bulkText, setBulkText] = useState('')
 
-  const [clients, setClients] = useState<Client[]>([
-    { text: '', file: null },
+  // PAYMENT (НОВОЕ)
+  const [items, setItems] = useState<any[]>([
+    { body: '', name: '', invoice: null },
   ])
 
-  const updateClient = (
-    index: number,
-    field: 'text' | 'file',
-    value: string | File | null
-  ) => {
-    const updated = [...clients]
-    updated[index][field] = value
-    setClients(updated)
+  const updateItem = (index: number, field: string, value: any) => {
+    const copy = [...items]
+    copy[index][field] = value
+    setItems(copy)
   }
 
-  const addClient = () => {
-    setClients([...clients, { text: '', file: null }])
+  const addItem = () => {
+    setItems([...items, { body: '', name: '', invoice: null }])
   }
 
   const handleCreate = async () => {
-    // ===== ОФОРМЛЕНИЕ =====
+    // создаем задачу
+    const { data: task } = await supabase
+      .from('tasks')
+      .insert({
+        type,
+        comment,
+        priority,
+        status: 'created',
+      })
+      .select()
+      .single()
+
+    if (!task) return
+
+    // ===== REGISTRATION =====
     if (type === 'registration') {
       const lines = bulkText.split('\n').filter(Boolean)
 
@@ -57,47 +64,27 @@ export default function CreateTaskModal() {
       }
     }
 
-    // ===== ОПЛАТА =====
+    // ===== PAYMENT (НОВАЯ ЛОГИКА) =====
     if (type === 'payment') {
-      const { data: task } = await supabase
-        .from('tasks')
-        .insert({
-          comment,
-          status: 'created',
-          type: 'payment',
-        })
-        .select()
-        .single()
+      for (const item of items) {
+        let filePath = null
 
-      if (!task) return
-
-      for (const c of clients) {
-        if (!c.text) continue
-
-        const [body, ...nameParts] = c.text.trim().split(' ')
-        const name = nameParts.join(' ')
-
-        let filePath: string | null = null
-
-        if (c.file) {
+        if (item.invoice) {
           const fileName =
-            Date.now() + '_' + c.file.name.replace(/\s/g, '_')
+            Date.now() + '_' + item.invoice.name.replace(/\s/g, '_')
 
-          const { error } = await supabase.storage
+          await supabase.storage
             .from('files')
-            .upload('invoices/' + fileName, c.file, {
-              upsert: true,
-            })
+            .upload('invoices/' + fileName, item.invoice)
 
-          if (!error) filePath = fileName
+          filePath = fileName
         }
 
         await supabase.from('task_items').insert({
           task_id: task.id,
-          body_number: body,
-          client_name: name,
+          body_number: item.body,
+          client_name: item.name,
           invoice_file: filePath,
-          is_paid: false,
         })
       }
     }
@@ -110,110 +97,120 @@ export default function CreateTaskModal() {
       <Button onClick={() => setOpen(true)}>+ Создать</Button>
 
       {open && (
-        <div className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center">
-          <div className="relative w-[580px]">
+        <div className="fixed inset-0 z-[9999] bg-black/30 flex items-center justify-center">
+          <div className="bg-white text-black p-6 rounded-xl w-[520px] space-y-4">
 
-            <button
-              onClick={() => setOpen(false)}
-              className="absolute right-2 top-2 z-50"
-            >
-              <X size={18} />
-            </button>
+            {/* ВЫБОР ТИПА */}
+            {!type && (
+              <div className="flex gap-4">
+                {[
+                  { key: 'payment', label: 'Оплата' },
+                  { key: 'registration', label: 'Оформление' },
+                ].map((item) => (
+                  <div
+                    key={item.key}
+                    onClick={() => setType(item.key)}
+                    className="relative cursor-pointer"
+                  >
+                    <div className="absolute -top-2 left-3 bg-white px-2 text-xs border rounded-t-md">
+                      {item.label}
+                    </div>
 
-            {/* ВКЛАДКИ */}
-            <div className="relative h-[48px]">
-              {[
-                { key: 'registration', label: 'Оформление' },
-                { key: 'payment', label: 'Оплата' },
-              ].map((tab, i) => (
-                <div
-                  key={tab.key}
-                  onClick={() => setType(tab.key as any)}
-                  className={`
-                    absolute px-5 py-1 text-sm border cursor-pointer
-                    ${type === tab.key ? 'top-0 bg-white z-20' : 'top-2 bg-gray-200 z-10'}
-                  `}
-                  style={{
-                    left: i * 160,
-                    clipPath:
-                      'polygon(0% 100%, 0% 30%, 10% 0%, 90% 0%, 100% 30%, 100% 100%)',
-                  }}
-                >
-                  {tab.label}
-                </div>
-              ))}
-            </div>
-
-            {/* ОСНОВА */}
-            <div className="bg-white border rounded-b-xl rounded-tr-xl p-5 space-y-4">
-
-              {type === 'registration' && (
-                <>
-                  <textarea
-                    placeholder="WB1234 Иванов Иван"
-                    className="w-full border p-2 rounded"
-                    value={bulkText}
-                    onChange={(e) => setBulkText(e.target.value)}
-                  />
-
-                  <textarea
-                    placeholder="Комментарий"
-                    className="w-full border p-2 rounded"
-                    onChange={(e) => setComment(e.target.value)}
-                  />
-
-                  <div className="flex gap-4 text-sm">
-                    {['high', 'medium', 'low'].map((p) => (
-                      <label key={p}>
-                        <input
-                          type="radio"
-                          checked={priority === p}
-                          onChange={() => setPriority(p)}
-                        />{' '}
-                        {p}
-                      </label>
-                    ))}
+                    <div className="w-36 h-24 bg-gray-100 border rounded-xl flex items-center justify-center hover:bg-gray-200 transition">
+                      📁
+                    </div>
                   </div>
-                </>
-              )}
+                ))}
+              </div>
+            )}
 
-              {type === 'payment' && (
-                <>
-                  {clients.map((c, i) => (
-                    <div key={i} className="border p-3 rounded-lg space-y-2">
+            {/* ===== ОФОРМЛЕНИЕ ===== */}
+            {type === 'registration' && (
+              <>
+                <textarea
+                  placeholder="WB1234 Иванов Иван"
+                  className="w-full border p-2 rounded"
+                  value={bulkText}
+                  onChange={(e) => setBulkText(e.target.value)}
+                />
+
+                <textarea
+                  placeholder="Комментарий"
+                  className="w-full border p-2 rounded"
+                  onChange={(e) => setComment(e.target.value)}
+                />
+
+                <div className="flex gap-3">
+                  {['high', 'medium', 'low'].map((p) => (
+                    <label key={p}>
                       <input
-                        placeholder="WB1234 Иванов Иван"
-                        className="w-full border p-2 rounded"
-                        value={c.text}
-                        onChange={(e) =>
-                          updateClient(i, 'text', e.target.value)
-                        }
-                      />
+                        type="radio"
+                        checked={priority === p}
+                        onChange={() => setPriority(p)}
+                      />{' '}
+                      {p}
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
 
+            {/* ===== ОПЛАТА ===== */}
+            {type === 'payment' && (
+              <>
+                {items.map((item, i) => (
+                  <div key={i} className="space-y-2 border p-3 rounded">
+
+                    <input
+                      placeholder="Кузов"
+                      className="w-full border p-1 rounded"
+                      onChange={(e) =>
+                        updateItem(i, 'body', e.target.value)
+                      }
+                    />
+
+                    <input
+                      placeholder="ФИО"
+                      className="w-full border p-1 rounded"
+                      onChange={(e) =>
+                        updateItem(i, 'name', e.target.value)
+                      }
+                    />
+
+                    <label className="text-[#0131FF] text-sm cursor-pointer">
+                      📤 Загрузить счет
                       <input
                         type="file"
+                        hidden
                         onChange={(e) =>
-                          updateClient(i, 'file', e.target.files?.[0] || null)
+                          updateItem(
+                            i,
+                            'invoice',
+                            e.target.files?.[0] || null
+                          )
                         }
                       />
-                    </div>
-                  ))}
+                    </label>
+                  </div>
+                ))}
 
-                  <button
-                    onClick={addClient}
-                    className="text-sm text-[#0131FF]"
-                  >
-                    + Добавить
-                  </button>
+                <button
+                  onClick={addItem}
+                  className="text-[#0131FF] text-sm"
+                >
+                  + Добавить
+                </button>
 
-                  <textarea
-                    placeholder="Комментарий"
-                    className="w-full border p-2 rounded"
-                    onChange={(e) => setComment(e.target.value)}
-                  />
-                </>
-              )}
+                <textarea
+                  placeholder="Комментарий"
+                  className="w-full border p-2 rounded"
+                  onChange={(e) => setComment(e.target.value)}
+                />
+              </>
+            )}
 
+            {/* КНОПКИ */}
+            {type && (
               <div className="flex justify-between">
                 <Button variant="outline" onClick={() => setOpen(false)}>
                   Отмена
@@ -223,7 +220,7 @@ export default function CreateTaskModal() {
                   Создать
                 </Button>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
