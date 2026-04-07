@@ -151,28 +151,18 @@ export default function CreateTaskModal() {
 
             {/* ===== ОПЛАТА ===== */}
             {type === 'payment' && (
-              <>
-                <textarea
-                  placeholder="WB1234 Иванов Иван"
-                  className="w-full border p-2 rounded"
-                  value={paymentList}
-                  onChange={(e) => setPaymentList(e.target.value)}
-                />
+  <>
+    <div className="text-sm text-gray-500">
+      Список физиков будет добавлен внутри задачи
+    </div>
 
-                <input
-                  type="file"
-                  onChange={(e) =>
-                    setInvoiceFile(e.target.files?.[0] || null)
-                  }
-                />
-
-                <textarea
-                  placeholder="Комментарий"
-                  className="w-full border p-2 rounded"
-                  onChange={(e) => setComment(e.target.value)}
-                />
-              </>
-            )}
+    <textarea
+      placeholder="Комментарий"
+      className="w-full border p-2 rounded"
+      onChange={(e) => setComment(e.target.value)}
+    />
+  </>
+)}
 
             {/* КНОПКИ */}
             {type && (
