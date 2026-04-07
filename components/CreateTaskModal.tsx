@@ -15,6 +15,21 @@ export default function CreateTaskModal() {
   // REGISTRATION
   const [bulkText, setBulkText] = useState('')
 
+  // PAYMENT (НОВОЕ)
+  const [items, setItems] = useState<any[]>([
+    { body: '', name: '', invoice: null },
+  ])
+
+  const updateItem = (index: number, field: string, value: any) => {
+    const copy = [...items]
+    copy[index][field] = value
+    setItems(copy)
+  }
+
+  const addItem = () => {
+    setItems([...items, { body: '', name: '', invoice: null }])
+  }
+
   const handleCreate = async () => {
     // создаем задачу
     const { data: task } = await supabase
@@ -49,31 +64,26 @@ export default function CreateTaskModal() {
       }
     }
 
-    // ===== PAYMENT =====
+    // ===== PAYMENT (НОВАЯ ЛОГИКА) =====
     if (type === 'payment') {
-      let filePath = null
+      for (const item of items) {
+        let filePath = null
 
-      if (invoiceFile) {
-        const fileName =
-          Date.now() + '_' + invoiceFile.name.replace(/\s/g, '_')
+        if (item.invoice) {
+          const fileName =
+            Date.now() + '_' + item.invoice.name.replace(/\s/g, '_')
 
-        await supabase.storage
-          .from('files')
-          .upload('invoices/' + fileName, invoiceFile)
+          await supabase.storage
+            .from('files')
+            .upload('invoices/' + fileName, item.invoice)
 
-        filePath = fileName
-      }
-
-      const lines = paymentList.split('\n').filter(Boolean)
-
-      for (const line of lines) {
-        const [body, ...nameParts] = line.trim().split(' ')
-        const name = nameParts.join(' ')
+          filePath = fileName
+        }
 
         await supabase.from('task_items').insert({
           task_id: task.id,
-          body_number: body,
-          client_name: name,
+          body_number: item.body,
+          client_name: item.name,
           invoice_file: filePath,
         })
       }
@@ -88,7 +98,7 @@ export default function CreateTaskModal() {
 
       {open && (
         <div className="fixed inset-0 z-[9999] bg-black/30 flex items-center justify-center">
-          <div className="bg-white text-black p-6 rounded-xl w-[500px] space-y-4">
+          <div className="bg-white text-black p-6 rounded-xl w-[520px] space-y-4">
 
             {/* ВЫБОР ТИПА */}
             {!type && (
@@ -147,18 +157,57 @@ export default function CreateTaskModal() {
 
             {/* ===== ОПЛАТА ===== */}
             {type === 'payment' && (
-  <>
-    <div className="text-sm text-gray-500">
-      Список физиков будет добавлен внутри задачи
-    </div>
+              <>
+                {items.map((item, i) => (
+                  <div key={i} className="space-y-2 border p-3 rounded">
 
-    <textarea
-      placeholder="Комментарий"
-      className="w-full border p-2 rounded"
-      onChange={(e) => setComment(e.target.value)}
-    />
-  </>
-)}
+                    <input
+                      placeholder="Кузов"
+                      className="w-full border p-1 rounded"
+                      onChange={(e) =>
+                        updateItem(i, 'body', e.target.value)
+                      }
+                    />
+
+                    <input
+                      placeholder="ФИО"
+                      className="w-full border p-1 rounded"
+                      onChange={(e) =>
+                        updateItem(i, 'name', e.target.value)
+                      }
+                    />
+
+                    <label className="text-[#0131FF] text-sm cursor-pointer">
+                      📤 Загрузить счет
+                      <input
+                        type="file"
+                        hidden
+                        onChange={(e) =>
+                          updateItem(
+                            i,
+                            'invoice',
+                            e.target.files?.[0] || null
+                          )
+                        }
+                      />
+                    </label>
+                  </div>
+                ))}
+
+                <button
+                  onClick={addItem}
+                  className="text-[#0131FF] text-sm"
+                >
+                  + Добавить
+                </button>
+
+                <textarea
+                  placeholder="Комментарий"
+                  className="w-full border p-2 rounded"
+                  onChange={(e) => setComment(e.target.value)}
+                />
+              </>
+            )}
 
             {/* КНОПКИ */}
             {type && (
