@@ -5,27 +5,29 @@ import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
 
+type Client = {
+  text: string
+  file: File | null
+}
+
 export default function CreateTaskModal() {
   const [open, setOpen] = useState(false)
   const [type, setType] = useState<'registration' | 'payment'>('registration')
 
-  // ОБЩЕЕ
   const [comment, setComment] = useState('')
   const [priority, setPriority] = useState('low')
 
-  // REGISTRATION
   const [bulkText, setBulkText] = useState('')
 
-  // PAYMENT
-  const [clients, setClients] = useState([
-    { text: '', file: null as File | null },
+  const [clients, setClients] = useState<Client[]>([
+    { text: '', file: null },
   ])
 
   const updateClient = (
-  index: number,
-  field: 'text' | 'file',
-  value: string | File | null
-) => {
+    index: number,
+    field: 'text' | 'file',
+    value: string | File | null
+  ) => {
     const updated = [...clients]
     updated[index][field] = value
     setClients(updated)
@@ -75,17 +77,19 @@ export default function CreateTaskModal() {
         const [body, ...nameParts] = c.text.trim().split(' ')
         const name = nameParts.join(' ')
 
-        let filePath = null
+        let filePath: string | null = null
 
         if (c.file) {
           const fileName =
             Date.now() + '_' + c.file.name.replace(/\s/g, '_')
 
-          await supabase.storage
+          const { error } = await supabase.storage
             .from('files')
-            .upload('invoices/' + fileName, c.file)
+            .upload('invoices/' + fileName, c.file, {
+              upsert: true,
+            })
 
-          filePath = fileName
+          if (!error) filePath = fileName
         }
 
         await supabase.from('task_items').insert({
@@ -93,6 +97,7 @@ export default function CreateTaskModal() {
           body_number: body,
           client_name: name,
           invoice_file: filePath,
+          is_paid: false,
         })
       }
     }
@@ -108,7 +113,6 @@ export default function CreateTaskModal() {
         <div className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center">
           <div className="relative w-[580px]">
 
-            {/* КРЕСТИК */}
             <button
               onClick={() => setOpen(false)}
               className="absolute right-2 top-2 z-50"
@@ -116,52 +120,33 @@ export default function CreateTaskModal() {
               <X size={18} />
             </button>
 
-            {/* ===== ВКЛАДКИ ===== */}
+            {/* ВКЛАДКИ */}
             <div className="relative h-[48px]">
-
-              {/* ОФОРМЛЕНИЕ */}
-              <div
-                onClick={() => setType('registration')}
-                className={`
-                  absolute left-0 px-5 py-1 text-sm cursor-pointer border
-                  ${type === 'registration'
-                    ? 'top-0 bg-white z-20'
-                    : 'top-2 bg-gray-200 z-10'}
-                `}
-                style={{
-                  borderTopLeftRadius: '10px',
-                  borderTopRightRadius: '10px',
-                  clipPath:
-                    'polygon(0% 100%, 0% 30%, 10% 0%, 90% 0%, 100% 30%, 100% 100%)',
-                }}
-              >
-                Оформление
-              </div>
-
-              {/* ОПЛАТА */}
-              <div
-                onClick={() => setType('payment')}
-                className={`
-                  absolute left-[160px] px-5 py-1 text-sm cursor-pointer border
-                  ${type === 'payment'
-                    ? 'top-0 bg-white z-20'
-                    : 'top-2 bg-gray-200 z-10'}
-                `}
-                style={{
-                  borderTopLeftRadius: '10px',
-                  borderTopRightRadius: '10px',
-                  clipPath:
-                    'polygon(0% 100%, 0% 30%, 10% 0%, 90% 0%, 100% 30%, 100% 100%)',
-                }}
-              >
-                Оплата
-              </div>
+              {[
+                { key: 'registration', label: 'Оформление' },
+                { key: 'payment', label: 'Оплата' },
+              ].map((tab, i) => (
+                <div
+                  key={tab.key}
+                  onClick={() => setType(tab.key as any)}
+                  className={`
+                    absolute px-5 py-1 text-sm border cursor-pointer
+                    ${type === tab.key ? 'top-0 bg-white z-20' : 'top-2 bg-gray-200 z-10'}
+                  `}
+                  style={{
+                    left: i * 160,
+                    clipPath:
+                      'polygon(0% 100%, 0% 30%, 10% 0%, 90% 0%, 100% 30%, 100% 100%)',
+                  }}
+                >
+                  {tab.label}
+                </div>
+              ))}
             </div>
 
-            {/* ===== ОСНОВНАЯ ПАПКА ===== */}
+            {/* ОСНОВА */}
             <div className="bg-white border rounded-b-xl rounded-tr-xl p-5 space-y-4">
 
-              {/* ===== ОФОРМЛЕНИЕ ===== */}
               {type === 'registration' && (
                 <>
                   <textarea
@@ -178,29 +163,24 @@ export default function CreateTaskModal() {
                   />
 
                   <div className="flex gap-4 text-sm">
-                    {[
-                      { key: 'high', label: 'Срочно' },
-                      { key: 'medium', label: 'Средняя' },
-                      { key: 'low', label: 'Низкая' },
-                    ].map((p) => (
-                      <label key={p.key} className="flex items-center gap-1">
+                    {['high', 'medium', 'low'].map((p) => (
+                      <label key={p}>
                         <input
                           type="radio"
-                          checked={priority === p.key}
-                          onChange={() => setPriority(p.key)}
-                        />
-                        {p.label}
+                          checked={priority === p}
+                          onChange={() => setPriority(p)}
+                        />{' '}
+                        {p}
                       </label>
                     ))}
                   </div>
                 </>
               )}
 
-              {/* ===== ОПЛАТА ===== */}
               {type === 'payment' && (
                 <>
                   {clients.map((c, i) => (
-                    <div key={i} className="space-y-2 border p-3 rounded-lg">
+                    <div key={i} className="border p-3 rounded-lg space-y-2">
                       <input
                         placeholder="WB1234 Иванов Иван"
                         className="w-full border p-2 rounded"
@@ -234,8 +214,7 @@ export default function CreateTaskModal() {
                 </>
               )}
 
-              {/* КНОПКИ */}
-              <div className="flex justify-between pt-2">
+              <div className="flex justify-between">
                 <Button variant="outline" onClick={() => setOpen(false)}>
                   Отмена
                 </Button>
