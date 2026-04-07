@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
+import { X } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 export default function CreateTaskModal() {
   const [open, setOpen] = useState(false)
@@ -15,37 +17,10 @@ export default function CreateTaskModal() {
   // REGISTRATION
   const [bulkText, setBulkText] = useState('')
 
-  // PAYMENT (НОВОЕ)
-  const [items, setItems] = useState<any[]>([
-    { body: '', name: '', invoice: null },
-  ])
-
-  const updateItem = (index: number, field: string, value: any) => {
-    const copy = [...items]
-    copy[index][field] = value
-    setItems(copy)
-  }
-
-  const addItem = () => {
-    setItems([...items, { body: '', name: '', invoice: null }])
-  }
-
   const handleCreate = async () => {
-    // создаем задачу
-    const { data: task } = await supabase
-      .from('tasks')
-      .insert({
-        type,
-        comment,
-        priority,
-        status: 'created',
-      })
-      .select()
-      .single()
+    if (!type) return
 
-    if (!task) return
-
-    // ===== REGISTRATION =====
+    // ===== ОФОРМЛЕНИЕ =====
     if (type === 'registration') {
       const lines = bulkText.split('\n').filter(Boolean)
 
@@ -64,29 +39,14 @@ export default function CreateTaskModal() {
       }
     }
 
-    // ===== PAYMENT (НОВАЯ ЛОГИКА) =====
+    // ===== ОПЛАТА =====
     if (type === 'payment') {
-      for (const item of items) {
-        let filePath = null
-
-        if (item.invoice) {
-          const fileName =
-            Date.now() + '_' + item.invoice.name.replace(/\s/g, '_')
-
-          await supabase.storage
-            .from('files')
-            .upload('invoices/' + fileName, item.invoice)
-
-          filePath = fileName
-        }
-
-        await supabase.from('task_items').insert({
-          task_id: task.id,
-          body_number: item.body,
-          client_name: item.name,
-          invoice_file: filePath,
-        })
-      }
+      await supabase.from('tasks').insert({
+        comment,
+        priority,
+        status: 'created',
+        type: 'payment',
+      })
     }
 
     location.reload()
@@ -96,134 +56,155 @@ export default function CreateTaskModal() {
     <>
       <Button onClick={() => setOpen(true)}>+ Создать</Button>
 
-      {open && (
-        <div className="fixed inset-0 z-[9999] bg-black/30 flex items-center justify-center">
-          <div className="bg-white text-black p-6 rounded-xl w-[520px] space-y-4">
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            {/* МОДАЛКА */}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="relative bg-[#f8f6f2] text-black p-6 rounded-2xl w-[520px] shadow-2xl"
+            >
+              {/* КРЕСТИК */}
+              <button
+                onClick={() => {
+                  setOpen(false)
+                  setType(null)
+                }}
+                className="absolute top-4 right-4 opacity-60 hover:opacity-100 transition"
+              >
+                <X size={18} />
+              </button>
 
-            {/* ВЫБОР ТИПА */}
-            {!type && (
-              <div className="flex gap-4">
-                {[
-                  { key: 'payment', label: 'Оплата' },
-                  { key: 'registration', label: 'Оформление' },
-                ].map((item) => (
-                  <div
-                    key={item.key}
-                    onClick={() => setType(item.key)}
-                    className="relative cursor-pointer"
-                  >
-                    <div className="absolute -top-2 left-3 bg-white px-2 text-xs border rounded-t-md">
-                      {item.label}
-                    </div>
+              {/* ===== ВКЛАДКИ ===== */}
+              {!type && (
+                <div className="relative h-[140px]">
 
-                    <div className="w-36 h-24 bg-gray-100 border rounded-xl flex items-center justify-center hover:bg-gray-200 transition">
-                      📁
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  {[
+                    { key: 'registration', label: 'Оформление' },
+                    { key: 'payment', label: 'Оплата' },
+                  ].map((tab, i) => (
+                    <motion.div
+                      key={tab.key}
+                      onClick={() => setType(tab.key)}
+                      initial={{ y: 20, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      transition={{ delay: i * 0.05 }}
+                      className={`
+                        absolute top-0 w-[220px] h-[120px]
+                        bg-white rounded-xl shadow-md cursor-pointer
+                        flex items-center justify-center
+                        hover:scale-[1.03] transition
+                      `}
+                      style={{
+                        left: i * 120,
+                        zIndex: 10 - i,
+                      }}
+                    >
+                      {/* ЯЗЫЧОК */}
+                      <div className="absolute -top-3 left-6 bg-white px-3 py-1 text-xs rounded-t-md shadow-sm border">
+                        {tab.label}
+                      </div>
 
-            {/* ===== ОФОРМЛЕНИЕ ===== */}
-            {type === 'registration' && (
-              <>
-                <textarea
-                  placeholder="WB1234 Иванов Иван"
-                  className="w-full border p-2 rounded"
-                  value={bulkText}
-                  onChange={(e) => setBulkText(e.target.value)}
-                />
-
-                <textarea
-                  placeholder="Комментарий"
-                  className="w-full border p-2 rounded"
-                  onChange={(e) => setComment(e.target.value)}
-                />
-
-                <div className="flex gap-3">
-                  {['high', 'medium', 'low'].map((p) => (
-                    <label key={p}>
-                      <input
-                        type="radio"
-                        checked={priority === p}
-                        onChange={() => setPriority(p)}
-                      />{' '}
-                      {p}
-                    </label>
+                      <div className="text-3xl opacity-70">📁</div>
+                    </motion.div>
                   ))}
                 </div>
-              </>
-            )}
+              )}
 
-            {/* ===== ОПЛАТА ===== */}
-            {type === 'payment' && (
-              <>
-                {items.map((item, i) => (
-                  <div key={i} className="space-y-2 border p-3 rounded">
+              {/* ===== ОФОРМЛЕНИЕ ===== */}
+              {type === 'registration' && (
+                <div className="space-y-4 mt-2">
+                  <textarea
+                    placeholder="WB1234 Иванов Иван"
+                    className="w-full border p-2 rounded-lg bg-white"
+                    value={bulkText}
+                    onChange={(e) => setBulkText(e.target.value)}
+                  />
 
-                    <input
-                      placeholder="Кузов"
-                      className="w-full border p-1 rounded"
-                      onChange={(e) =>
-                        updateItem(i, 'body', e.target.value)
-                      }
-                    />
+                  <textarea
+                    placeholder="Комментарий"
+                    className="w-full border p-2 rounded-lg bg-white"
+                    onChange={(e) => setComment(e.target.value)}
+                  />
 
-                    <input
-                      placeholder="ФИО"
-                      className="w-full border p-1 rounded"
-                      onChange={(e) =>
-                        updateItem(i, 'name', e.target.value)
-                      }
-                    />
-
-                    <label className="text-[#0131FF] text-sm cursor-pointer">
-                      📤 Загрузить счет
-                      <input
-                        type="file"
-                        hidden
-                        onChange={(e) =>
-                          updateItem(
-                            i,
-                            'invoice',
-                            e.target.files?.[0] || null
-                          )
-                        }
-                      />
-                    </label>
+                  <div className="flex gap-4 text-sm">
+                    {[
+                      { key: 'high', label: 'Срочно' },
+                      { key: 'medium', label: 'Средняя' },
+                      { key: 'low', label: 'Низкая' },
+                    ].map((p) => (
+                      <label key={p.key} className="flex items-center gap-1">
+                        <input
+                          type="radio"
+                          checked={priority === p.key}
+                          onChange={() => setPriority(p.key)}
+                        />
+                        {p.label}
+                      </label>
+                    ))}
                   </div>
-                ))}
+                </div>
+              )}
 
-                <button
-                  onClick={addItem}
-                  className="text-[#0131FF] text-sm"
-                >
-                  + Добавить
-                </button>
+              {/* ===== ОПЛАТА ===== */}
+              {type === 'payment' && (
+                <div className="space-y-4 mt-2">
+                  <div className="text-sm text-gray-500">
+                    Физики добавляются внутри задачи
+                  </div>
 
-                <textarea
-                  placeholder="Комментарий"
-                  className="w-full border p-2 rounded"
-                  onChange={(e) => setComment(e.target.value)}
-                />
-              </>
-            )}
+                  <textarea
+                    placeholder="Комментарий"
+                    className="w-full border p-2 rounded-lg bg-white"
+                    onChange={(e) => setComment(e.target.value)}
+                  />
 
-            {/* КНОПКИ */}
-            {type && (
-              <div className="flex justify-between">
-                <Button variant="outline" onClick={() => setOpen(false)}>
-                  Отмена
-                </Button>
+                  <div className="flex gap-4 text-sm">
+                    {[
+                      { key: 'high', label: 'Срочно' },
+                      { key: 'medium', label: 'Средняя' },
+                      { key: 'low', label: 'Низкая' },
+                    ].map((p) => (
+                      <label key={p.key} className="flex items-center gap-1">
+                        <input
+                          type="radio"
+                          checked={priority === p.key}
+                          onChange={() => setPriority(p.key)}
+                        />
+                        {p.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-                <Button onClick={handleCreate}>
-                  Создать
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+              {/* ===== КНОПКИ ===== */}
+              {type && (
+                <div className="flex justify-between mt-6">
+                  <Button
+                    variant="outline"
+                    onClick={() => setType(null)}
+                  >
+                    Назад
+                  </Button>
+
+                  <Button onClick={handleCreate}>
+                    Создать
+                  </Button>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }
