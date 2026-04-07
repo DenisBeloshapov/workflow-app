@@ -63,7 +63,11 @@ export default function Page() {
   const filteredTasks =
     filter === 'all'
       ? tasks
-      : tasks.filter((t) => t.department?.includes(filter))
+      : tasks.filter(
+  (t) =>
+    t.department?.includes(filter) ||
+    t.type === filter
+)
 
   const newTasks = filteredTasks.filter((t) => t.status === 'created')
   const inWork = filteredTasks.filter((t) => t.status === 'taken')
