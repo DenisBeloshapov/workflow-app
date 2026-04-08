@@ -4,6 +4,12 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 
+type Item = {
+  text: string
+  invoice: File | null
+  loading: boolean
+}
+
 export default function CreateTaskModal() {
   const [open, setOpen] = useState(false)
   const [type, setType] = useState<'registration' | 'payment' | 'passport'>('registration')
@@ -12,18 +18,27 @@ export default function CreateTaskModal() {
   const [priority, setPriority] = useState('low')
   const [bulkText, setBulkText] = useState('')
 
-  const [items, setItems] = useState([
-    { text: '', invoice: null as File | null, loading: false },
+  const [items, setItems] = useState<Item[]>([
+    { text: '', invoice: null, loading: false },
   ])
 
-  const updateItem = (i: number, field: string, value: any) => {
-    const copy = [...items]
-    copy[i][field] = value
-    setItems(copy)
+  const updateItem = (
+    index: number,
+    field: 'text' | 'invoice' | 'loading',
+    value: string | File | null | boolean
+  ) => {
+    setItems((prev) => {
+      const copy = [...prev]
+      copy[index] = {
+        ...copy[index],
+        [field]: value,
+      }
+      return copy
+    })
   }
 
   const addItem = () => {
-    setItems([...items, { text: '', invoice: null, loading: false }])
+    setItems((prev) => [...prev, { text: '', invoice: null, loading: false }])
   }
 
   const handleCreate = async () => {
@@ -72,13 +87,20 @@ export default function CreateTaskModal() {
       let filePath = null
 
       if (item.invoice) {
-        const fileName = Date.now() + '_' + item.invoice.name.replace(/\s/g, '_')
+        updateItem(i, 'loading', true)
 
-        await supabase.storage
+        const fileName =
+          Date.now() + '_' + item.invoice.name.replace(/\s/g, '_')
+
+        const { error } = await supabase.storage
           .from('files')
           .upload('invoices/' + fileName, item.invoice)
 
-        filePath = fileName
+        updateItem(i, 'loading', false)
+
+        if (!error) {
+          filePath = fileName
+        }
       }
 
       await supabase.from('task_items').insert({
@@ -100,7 +122,7 @@ export default function CreateTaskModal() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999]">
           <div className="bg-white p-5 rounded-xl w-[520px] space-y-4">
 
-            {/* переключатель */}
+            {/* ФИЛЬТРЫ */}
             <div className="flex gap-2">
               {[
                 { key: 'registration', label: 'Оформление' },
@@ -110,10 +132,10 @@ export default function CreateTaskModal() {
                 <button
                   key={b.key}
                   onClick={() => setType(b.key as any)}
-                  className={`px-3 py-1 rounded-full border text-sm ${
+                  className={`px-3 py-1.5 text-sm rounded-full border transition ${
                     type === b.key
                       ? 'bg-black text-white'
-                      : 'bg-white'
+                      : 'bg-white hover:bg-gray-200'
                   }`}
                 >
                   {b.label}
@@ -121,7 +143,7 @@ export default function CreateTaskModal() {
               ))}
             </div>
 
-            {/* оформление / паспорта */}
+            {/* ===== ОФОРМЛЕНИЕ / ПАСПОРТА ===== */}
             {type !== 'payment' && (
               <>
                 <textarea
@@ -138,13 +160,18 @@ export default function CreateTaskModal() {
                 />
 
                 <div className="flex gap-3">
-                  {['high', 'medium', 'low'].map((p) => (
-                    <label key={p}>
+                  {[
+                    { key: 'high', label: 'Срочно' },
+                    { key: 'medium', label: 'Средняя' },
+                    { key: 'low', label: 'Низкая' },
+                  ].map((p) => (
+                    <label key={p.key}>
                       <input
                         type="radio"
-                        checked={priority === p}
-                        onChange={() => setPriority(p)}
-                      /> {p}
+                        checked={priority === p.key}
+                        onChange={() => setPriority(p.key)}
+                      />{' '}
+                      {p.label}
                     </label>
                   ))}
                 </div>
@@ -172,10 +199,20 @@ export default function CreateTaskModal() {
                         type="file"
                         hidden
                         onChange={(e) =>
-                          updateItem(i, 'invoice', e.target.files?.[0] || null)
+                          updateItem(
+                            i,
+                            'invoice',
+                            e.target.files?.[0] || null
+                          )
                         }
                       />
                     </label>
+
+                    {item.loading && (
+                      <div className="text-xs text-gray-500">
+                        Загрузка...
+                      </div>
+                    )}
                   </div>
                 ))}
 
@@ -203,6 +240,7 @@ export default function CreateTaskModal() {
                 Создать
               </Button>
             </div>
+
           </div>
         </div>
       )}
