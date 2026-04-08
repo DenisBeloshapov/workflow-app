@@ -13,13 +13,17 @@ export default function MoveButton({
   label: string
 }) {
   const handleMove = async () => {
-    if (!taskId) return
-
     await supabase
       .from('tasks')
       .update({ status })
       .eq('id', taskId)
+
+    
   }
 
-  return <Button size="sm" onClick={handleMove}>{label}</Button>
+  return (
+    <Button size="sm" onClick={handleMove}>
+      {label}
+    </Button>
+  )
 }
