@@ -1,65 +1,112 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 
-export default function ReturnButton({
-  task,
-  updateTaskLocal,
-}: any) {
+export default function ReturnButton({ task }: { task: any }) {
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+
+    if (open) {
+      document.addEventListener('keydown', handleEsc)
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEsc)
+    }
+  }, [open])
 
   const handleReturn = async () => {
-    updateTaskLocal(task.id, {
-      status: 'created',
-      comment: (task.comment || '') + '\n\n🔁 Возврат: ' + reason,
-      assigned_to: null,
-    })
+    if (!reason) return
 
-    await supabase
+    setLoading(true)
+
+    const newComment =
+      (task.comment || '') +
+      '\n\n🔁 Возврат: ' +
+      reason
+
+    const { error } = await supabase
       .from('tasks')
       .update({
-        status: 'created',
-        comment: (task.comment || '') + '\n\n🔁 Возврат: ' + reason,
-        assigned_to: null,
+        status: 'taken',
+        comment: newComment,
       })
       .eq('id', task.id)
 
-    setOpen(false)
+    if (error) {
+      console.log(error)
+      alert('Ошибка возврата')
+      setLoading(false)
+      return
+    }
   }
 
   return (
     <>
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-        Вернуть
+        🔁 Вернуть
       </Button>
 
-      {open && (
-        <div className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center">
-          <div className="bg-white p-5 rounded-xl w-[400px] space-y-3">
+      {mounted &&
+        createPortal(
+          <AnimatePresence>
+            {open && (
+              <motion.div
+                className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setOpen(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-white text-black p-6 rounded-2xl w-[400px] space-y-4 shadow-xl"
+                >
+                  <div className="text-lg font-semibold">
+                    Возврат задачи
+                  </div>
 
-            <div className="text-sm font-medium">Причина возврата</div>
+                  <textarea
+                    placeholder="Причина возврата..."
+                    className="w-full border p-2 rounded-lg bg-white text-black"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                  />
 
-            <textarea
-              className="w-full border p-2 rounded"
-              onChange={(e) => setReason(e.target.value)}
-            />
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={() => setOpen(false)}>
+                      Отмена
+                    </Button>
 
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setOpen(false)}>
-                Отмена
-              </Button>
-
-              <Button onClick={handleReturn}>
-                Подтвердить
-              </Button>
-            </div>
-
-          </div>
-        </div>
-      )}
+                    <Button onClick={handleReturn} disabled={loading}>
+                      Подтвердить
+                    </Button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
     </>
   )
 }
