@@ -4,12 +4,6 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 
-type PaymentItem = {
-  text: string
-  invoice: File | null
-  loading?: boolean
-}
-
 export default function CreateTaskModal() {
   const [open, setOpen] = useState(false)
   const [type, setType] = useState<'registration' | 'payment' | 'passport'>('registration')
@@ -17,26 +11,24 @@ export default function CreateTaskModal() {
   const [comment, setComment] = useState('')
   const [priority, setPriority] = useState('low')
 
-  // ===== REGISTRATION / PASSPORT =====
   const [bulkText, setBulkText] = useState('')
 
-  // ===== PAYMENT =====
-  const [items, setItems] = useState<PaymentItem[]>([
-    { text: '', invoice: null },
+  const [items, setItems] = useState<any[]>([
+    { text: '', invoice: null, loading: false },
   ])
 
-  const updateItem = (index: number, field: keyof PaymentItem, value: any) => {
+  const updateItem = (index: number, field: string, value: any) => {
     const copy = [...items]
     copy[index][field] = value
     setItems(copy)
   }
 
   const addItem = () => {
-    setItems([...items, { text: '', invoice: null }])
+    setItems([...items, { text: '', invoice: null, loading: false }])
   }
 
   const handleCreate = async () => {
-    // ===== ОФОРМЛЕНИЕ / ПАСПОРТА =====
+    // ОФОРМЛЕНИЕ / ПАСПОРТА
     if (type === 'registration' || type === 'passport') {
       const lines = bulkText.split('\n').filter(Boolean)
 
@@ -55,7 +47,7 @@ export default function CreateTaskModal() {
       }
     }
 
-    // ===== ОПЛАТА =====
+    // ОПЛАТА
     if (type === 'payment') {
       const { data: task } = await supabase
         .from('tasks')
@@ -79,7 +71,6 @@ export default function CreateTaskModal() {
         let filePath = null
 
         if (item.invoice) {
-          // 🔥 индикатор загрузки
           updateItem(i, 'loading', true)
 
           const fileName =
@@ -136,7 +127,6 @@ export default function CreateTaskModal() {
               ))}
             </div>
 
-            {/* ===== ОФОРМЛЕНИЕ / ПАСПОРТА ===== */}
             {(type === 'registration' || type === 'passport') && (
               <>
                 <textarea
@@ -153,25 +143,19 @@ export default function CreateTaskModal() {
                 />
 
                 <div className="flex gap-3">
-                  {[
-                    { key: 'high', label: 'Срочно' },
-                    { key: 'medium', label: 'Средняя' },
-                    { key: 'low', label: 'Низкая' },
-                  ].map((p) => (
-                    <label key={p.key}>
+                  {['high', 'medium', 'low'].map((p) => (
+                    <label key={p}>
                       <input
                         type="radio"
-                        checked={priority === p.key}
-                        onChange={() => setPriority(p.key)}
-                      />{' '}
-                      {p.label}
+                        checked={priority === p}
+                        onChange={() => setPriority(p)}
+                      /> {p}
                     </label>
                   ))}
                 </div>
               </>
             )}
 
-            {/* ===== ОПЛАТА ===== */}
             {type === 'payment' && (
               <>
                 {items.map((item, i) => (
@@ -192,11 +176,7 @@ export default function CreateTaskModal() {
                         type="file"
                         hidden
                         onChange={(e) =>
-                          updateItem(
-                            i,
-                            'invoice',
-                            e.target.files?.[0] || null
-                          )
+                          updateItem(i, 'invoice', e.target.files?.[0] || null)
                         }
                       />
                     </label>
@@ -211,7 +191,7 @@ export default function CreateTaskModal() {
 
                 <button
                   onClick={addItem}
-                  className="text-sm text-[#0131FF]"
+                  className="text-[#0131FF] text-sm"
                 >
                   + Добавить
                 </button>
@@ -233,6 +213,7 @@ export default function CreateTaskModal() {
                 Создать
               </Button>
             </div>
+
           </div>
         </div>
       )}
