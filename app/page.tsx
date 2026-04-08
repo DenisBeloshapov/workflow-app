@@ -44,7 +44,6 @@ export default function Page() {
     setTasks(data || [])
   }
 
-  // 🔥 мгновенное обновление UI
   const updateTaskLocal = (taskId: string, updates: any) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
@@ -82,7 +81,6 @@ export default function Page() {
           {task.body_number} {task.client_name}
         </div>
 
-        {/* приоритет */}
         <div
           className={
             'text-xs px-4 py-1.5 rounded-full font-medium ' +
@@ -119,10 +117,7 @@ export default function Page() {
 
       <div className="mt-4 flex gap-2">
         {task.status === 'created' && (
-          <TakeButton
-            task={task}
-            updateTaskLocal={updateTaskLocal}
-          />
+          <TakeButton task={task} updateTaskLocal={updateTaskLocal} />
         )}
 
         {task.status === 'taken' && (
@@ -136,10 +131,7 @@ export default function Page() {
 
         {task.status === 'done' && (
           <>
-            <ReturnButton
-              task={task}
-              updateTaskLocal={updateTaskLocal}
-            />
+            <ReturnButton task={task} updateTaskLocal={updateTaskLocal} />
             <MoveButton
               task={task}
               status="closed"
@@ -154,8 +146,6 @@ export default function Page() {
 
   const Column = ({ title, items }: any) => (
     <div className="relative p-4 rounded-2xl bg-gray-200 dark:bg-zinc-900 overflow-hidden">
-      
-      {/* точки */}
       <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(#888_1px,transparent_1px)] [background-size:18px_18px]" />
 
       <div className="relative z-10">
@@ -189,6 +179,9 @@ export default function Page() {
         </div>
 
         <div className="flex gap-2">
+
+          <CreateTaskModal />
+
           <Link href="/archive">
             <button className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition text-black dark:text-white">
               Архив
@@ -206,11 +199,19 @@ export default function Page() {
             </button>
           )}
 
-          <CreateTaskModal />
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut()
+              location.reload()
+            }}
+            className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition text-black dark:text-white"
+          >
+            Выйти
+          </button>
+
         </div>
       </div>
 
-      {/* фильтр */}
       <div className="flex gap-2 mb-6">
         {[
           { key: 'all', label: 'Все' },
