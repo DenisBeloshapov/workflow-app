@@ -3,7 +3,13 @@
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 
-export default function TakeButton({ taskId }: { taskId: string }) {
+export default function TakeButton({
+  task,
+  updateTaskLocal,
+}: {
+  task: any
+  updateTaskLocal: (taskId: string, updates: any) => void
+}) {
   const handleTake = async () => {
     const { data } = await supabase.auth.getUser()
 
@@ -12,16 +18,30 @@ export default function TakeButton({ taskId }: { taskId: string }) {
       data.user?.email ||
       'Сотрудник'
 
-    await supabase
+    // ⚡ МГНОВЕННЫЙ UI
+    updateTaskLocal(task.id, {
+      status: 'taken',
+      assigned_to: name,
+    })
+
+    // 💾 запись в БД
+    const { error } = await supabase
       .from('tasks')
       .update({
         status: 'taken',
         assigned_to: name,
       })
-      .eq('id', taskId)
+      .eq('id', task.id)
 
-    location.reload()
+    if (error) {
+      alert('Ошибка')
+      console.log(error)
+    }
   }
 
-  return <Button size="sm" onClick={handleTake}>Взять</Button>
+  return (
+    <Button size="sm" onClick={handleTake}>
+      Взять
+    </Button>
+  )
 }
