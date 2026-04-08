@@ -176,14 +176,14 @@ export default function Page() {
                   </label>
 
                   {item.check_file && (
-                    <a
-                      href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/checks/${item.check_file}`}
-                      target="_blank"
-                      className="text-green-600"
-                    >
-                      ✅ чек
-                    </a>
-                  )}
+  <a
+    href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/checks/${item.check_file}`}
+    target="_blank"
+    className="text-green-600"
+  >
+    ✅ чек
+  </a>
+)}
                 </div>
               </div>
             ))}
