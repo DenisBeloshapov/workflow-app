@@ -221,8 +221,6 @@ export default function Page() {
   </button>
 
 </div>
-      </div>
-
       {/* фильтр */}
       <div className="flex gap-2 mb-6">
         {[
