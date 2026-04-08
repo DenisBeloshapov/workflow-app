@@ -2,7 +2,6 @@
 
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { getUserName } from '@/lib/getUserName'
 
 export default function TakeButton({
   task,
@@ -12,23 +11,41 @@ export default function TakeButton({
   updateTaskLocal: (id: string, updates: any) => void
 }) {
   const handleTake = async () => {
-    const { data } = await supabase.auth.getUser()
+    const { data, error } = await supabase.auth.getUser()
 
-    const name = getUserName(data.user)
+    if (error || !data.user) {
+      alert('Не авторизован')
+      return
+    }
 
+    // 🔑 ВАЖНО: возвращаем твою старую логику имени
+    const name =
+      data.user.user_metadata?.name || data.user.email
+
+    // ⚡ мгновенный UI
     updateTaskLocal(task.id, {
       status: 'taken',
       assigned_to: name,
     })
 
-    await supabase
+    // 💾 запись в базу
+    const { error: updateError } = await supabase
       .from('tasks')
       .update({
         status: 'taken',
         assigned_to: name,
       })
       .eq('id', task.id)
+
+    if (updateError) {
+      alert('Ошибка при взятии задачи')
+      console.log(updateError)
+    }
   }
 
-  return <Button size="sm" onClick={handleTake}>Взять</Button>
+  return (
+    <Button size="sm" onClick={handleTake}>
+      Взять
+    </Button>
+  )
 }
