@@ -17,22 +17,21 @@ export default function Page() {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
-    fetchTasks()
+  setMounted(true)
 
-    const channel = supabase
-      .channel('tasks')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
-        () => fetchTasks()
-      )
-      .subscribe()
+  const checkUser = async () => {
+    const { data } = await supabase.auth.getUser()
 
-    return () => {
-      supabase.removeChannel(channel)
+    if (!data.user) {
+      window.location.href = '/login'
+      return
     }
-  }, [])
+
+    fetchTasks()
+  }
+
+  checkUser()
+}, [])
 
   const fetchTasks = async () => {
     const { data } = await supabase
