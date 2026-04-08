@@ -20,7 +20,7 @@ export default function TakeButton({
 
     // 🔑 ВАЖНО: возвращаем твою старую логику имени
     const name =
-      data.user.user_metadata?.name || data.user.email
+      data.user.user_metadata?.name
 
     // ⚡ мгновенный UI
     updateTaskLocal(task.id, {
