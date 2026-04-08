@@ -4,41 +4,59 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 
-export default function ReturnButton({ task }: any) {
+export default function ReturnButton({
+  task,
+  updateTaskLocal,
+}: any) {
   const [open, setOpen] = useState(false)
-  const [comment, setComment] = useState('')
+  const [reason, setReason] = useState('')
 
   const handleReturn = async () => {
+    updateTaskLocal(task.id, {
+      status: 'created',
+      comment: (task.comment || '') + '\n\n🔁 Возврат: ' + reason,
+      assigned_to: null,
+    })
+
     await supabase
       .from('tasks')
       .update({
         status: 'created',
-        comment: (task.comment || '') + '\n\nВозврат: ' + comment,
+        comment: (task.comment || '') + '\n\n🔁 Возврат: ' + reason,
+        assigned_to: null,
       })
       .eq('id', task.id)
 
-    location.reload()
+    setOpen(false)
   }
 
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)}>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
         Вернуть
       </Button>
 
       {open && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded-xl w-[300px] space-y-3">
+        <div className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center">
+          <div className="bg-white p-5 rounded-xl w-[400px] space-y-3">
+
+            <div className="text-sm font-medium">Причина возврата</div>
+
             <textarea
-              placeholder="Причина возврата"
               className="w-full border p-2 rounded"
-              onChange={(e) => setComment(e.target.value)}
+              onChange={(e) => setReason(e.target.value)}
             />
 
             <div className="flex justify-between">
-              <Button onClick={() => setOpen(false)}>Отмена</Button>
-              <Button onClick={handleReturn}>Отправить</Button>
+              <Button variant="outline" onClick={() => setOpen(false)}>
+                Отмена
+              </Button>
+
+              <Button onClick={handleReturn}>
+                Подтвердить
+              </Button>
             </div>
+
           </div>
         </div>
       )}
