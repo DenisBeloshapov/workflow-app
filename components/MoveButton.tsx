@@ -2,35 +2,24 @@
 
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { useState } from 'react'
 
 export default function MoveButton({
-  task,
+  taskId,
   status,
   label,
-  updateTaskLocal,
-}: any) {
-  const [loading, setLoading] = useState(false)
-
+}: {
+  taskId: string
+  status: string
+  label: string
+}) {
   const handleMove = async () => {
-    if (loading) return
-    setLoading(true)
+    if (!taskId) return
 
-    // ⚡ мгновенно
-    updateTaskLocal(task.id, { status })
-
-    // 🔄 база
     await supabase
       .from('tasks')
       .update({ status })
-      .eq('id', task.id)
-
-    setLoading(false)
+      .eq('id', taskId)
   }
 
-  return (
-    <Button size="sm" onClick={handleMove} disabled={loading}>
-      {loading ? '...' : label}
-    </Button>
-  )
+  return <Button size="sm" onClick={handleMove}>{label}</Button>
 }
