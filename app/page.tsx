@@ -170,7 +170,7 @@ export default function Page() {
                           .update({ check_file: name })
                           .eq('id', item.id)
 
-                        location.reload()
+                      
                       }}
                     />
                   </label>
