@@ -189,26 +189,38 @@ export default function Page() {
         </div>
 
         <div className="flex gap-2">
-          <Link href="/archive">
-            <button className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition text-black dark:text-white">
-              Архив
-            </button>
-          </Link>
 
-          {mounted && (
-            <button
-              onClick={() =>
-                setTheme(theme === 'dark' ? 'light' : 'dark')
-              }
-              className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition text-black dark:text-white"
-            >
-              {theme === 'dark' ? '☀️' : '🌙'}
-            </button>
-          )}
+  <CreateTaskModal />
 
-          <CreateTaskModal />
-        </div>
-      </div>
+  <Link href="/archive">
+    <button className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition text-black dark:text-white">
+      Архив
+    </button>
+  </Link>
+
+  {mounted && (
+    <button
+      onClick={() =>
+        setTheme(theme === 'dark' ? 'light' : 'dark')
+      }
+      className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition text-black dark:text-white"
+    >
+      {theme === 'dark' ? '☀️' : '🌙'}
+    </button>
+  )}
+
+  {/* 🔥 ВЫХОД */}
+  <button
+    onClick={async () => {
+      await supabase.auth.signOut()
+      location.reload()
+    }}
+    className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition text-black dark:text-white"
+  >
+    Выйти
+  </button>
+
+</div>
 
       {/* фильтр */}
       <div className="flex gap-2 mb-6">
