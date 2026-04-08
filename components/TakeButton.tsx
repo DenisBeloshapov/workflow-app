@@ -2,37 +2,39 @@
 
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
+import { useState } from 'react'
 
-export default function TakeButton({ taskId }: { taskId: string }) {
+export default function TakeButton({ task, updateTaskLocal }: any) {
+  const [loading, setLoading] = useState(false)
+
   const handleTake = async () => {
-    const { data, error: userError } = await supabase.auth.getUser()
+    if (loading) return
+    setLoading(true)
 
-    if (userError || !data.user) {
-      alert('Не авторизован')
-      return
-    }
+    const { data } = await supabase.auth.getUser()
+    const name = data.user?.user_metadata?.name || 'Сотрудник'
 
-    const name =
-      data.user.user_metadata?.full_name || data.user.email
+    // ⚡ мгновенно обновляем UI
+    updateTaskLocal(task.id, {
+      status: 'taken',
+      assigned_to: name,
+    })
 
-    const { error } = await supabase
+    // 🔄 отправка в базу
+    await supabase
       .from('tasks')
       .update({
         status: 'taken',
         assigned_to: name,
       })
-      .eq('id', taskId)
+      .eq('id', task.id)
 
-    if (error) {
-      alert('Ошибка при взятии задачи')
-      console.log(error)
-      return
-    }
+    setLoading(false)
   }
 
   return (
-    <Button size="sm" onClick={handleTake}>
-      Взять
+    <Button size="sm" onClick={handleTake} disabled={loading}>
+      {loading ? '...' : 'Взять'}
     </Button>
   )
 }
