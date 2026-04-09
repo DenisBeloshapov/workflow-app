@@ -17,26 +17,29 @@ export default function Page() {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-  setMounted(true)
+    setMounted(true)
 
-  const checkUser = async () => {
-    const { data } = await supabase.auth.getUser()
+    const checkUser = async () => {
+      const { data } = await supabase.auth.getUser()
 
-    if (!data.user) {
-      window.location.href = '/login'
-      return
+      if (!data.user) {
+        window.location.href = '/login'
+        return
+      }
+
+      fetchTasks()
     }
 
-    fetchTasks()
-  }
-
-  checkUser()
-}, [])
+    checkUser()
+  }, [])
 
   const fetchTasks = async () => {
     const { data } = await supabase
       .from('tasks')
-      .select('*')
+      .select(`
+        *,
+        task_items (*)
+      `)
       .neq('status', 'closed')
       .order('created_at', { ascending: false })
 
@@ -45,7 +48,9 @@ export default function Page() {
 
   const updateTaskLocal = (taskId: string, updates: any) => {
     setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
+      prev.map((t) =>
+        t.id === taskId ? { ...t, ...updates } : t
+      )
     )
   }
 
@@ -55,6 +60,29 @@ export default function Page() {
     if (dep.includes('registration')) return 'Оформление'
     if (dep.includes('passport')) return 'Паспорта'
     return dep
+  }
+
+  const getFileUrl = (path: string) => {
+    return supabase.storage.from('files').getPublicUrl(path).data.publicUrl
+  }
+
+  const handleUploadCheck = async (item: any, file: File) => {
+    const fileName =
+      Date.now() + '_' + file.name.replace(/\s/g, '_')
+
+    await supabase.storage
+      .from('files')
+      .upload('checks/' + fileName, file, { upsert: true }) // ✅ перезапись
+
+    await supabase
+      .from('task_items')
+      .update({
+        check_file: fileName,
+        is_paid: true,
+      })
+      .eq('id', item.id)
+
+    fetchTasks()
   }
 
   const filteredTasks =
@@ -80,22 +108,24 @@ export default function Page() {
           {task.body_number} {task.client_name}
         </div>
 
-        <div
-          className={
-            'text-xs px-4 py-1.5 rounded-full font-medium ' +
-            (task.priority === 'high'
-              ? 'bg-red-500/80 text-white'
+        {task.priority && (
+          <div
+            className={
+              'text-xs px-4 py-1.5 rounded-full font-medium ' +
+              (task.priority === 'high'
+                ? 'bg-red-500/80 text-white'
+                : task.priority === 'medium'
+                ? 'bg-yellow-400/80 text-white'
+                : 'bg-green-400/80 text-white')
+            }
+          >
+            {task.priority === 'high'
+              ? 'Срочно'
               : task.priority === 'medium'
-              ? 'bg-yellow-400/80 text-white'
-              : 'bg-green-400/80 text-white')
-          }
-        >
-          {task.priority === 'high'
-            ? 'Срочно'
-            : task.priority === 'medium'
-            ? 'Средняя'
-            : 'Низкая'}
-        </div>
+              ? 'Средняя'
+              : 'Низкая'}
+          </div>
+        )}
       </div>
 
       <div className="text-xs text-gray-400 mt-2">
@@ -114,29 +144,73 @@ export default function Page() {
         </div>
       )}
 
+      {/* ===== ОПЛАТА ===== */}
+      {task.type === 'payment' && (
+        <div className="mt-3 space-y-2">
+          {task.task_items?.map((item: any) => (
+            <div
+              key={item.id}
+              className="border p-2 rounded text-sm space-y-1"
+            >
+              <div>
+                {item.body_number} {item.client_name}
+              </div>
+
+              <div className="flex gap-3 text-[#0131FF] text-xs">
+
+                {/* СЧЕТ */}
+                {item.invoice_file && (
+                  <a
+                    href={getFileUrl('invoices/' + item.invoice_file)}
+                    target="_blank"
+                  >
+                    📥 Счет
+                  </a>
+                )}
+
+                {/* ЧЕК СКАЧАТЬ */}
+                {item.check_file && (
+                  <a
+                    href={getFileUrl('checks/' + item.check_file)}
+                    target="_blank"
+                  >
+                    📥 Чек
+                  </a>
+                )}
+
+                {/* ЧЕК ЗАГРУЗИТЬ / ПЕРЕЗАПИСАТЬ */}
+                <label className="cursor-pointer">
+                  📤 Чек
+                  <input
+                    type="file"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleUploadCheck(item, file)
+                    }}
+                  />
+                </label>
+
+                {item.is_paid && '✅'}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="mt-4 flex gap-2">
         {task.status === 'created' && (
           <TakeButton task={task} updateTaskLocal={updateTaskLocal} />
         )}
 
         {task.status === 'taken' && (
-          <MoveButton
-            task={task}
-            status="done"
-            label="Готово"
-            updateTaskLocal={updateTaskLocal}
-          />
+          <MoveButton task={task} status="done" label="Готово" updateTaskLocal={updateTaskLocal} />
         )}
 
         {task.status === 'done' && (
           <>
             <ReturnButton task={task} updateTaskLocal={updateTaskLocal} />
-            <MoveButton
-              task={task}
-              status="closed"
-              label="В архив"
-              updateTaskLocal={updateTaskLocal}
-            />
+            <MoveButton task={task} status="closed" label="В архив" updateTaskLocal={updateTaskLocal} />
           </>
         )}
       </div>
@@ -178,7 +252,6 @@ export default function Page() {
         </div>
 
         <div className="flex gap-2">
-
           <CreateTaskModal />
 
           <Link href="/archive">
@@ -201,13 +274,12 @@ export default function Page() {
           <button
             onClick={async () => {
               await supabase.auth.signOut()
-              location.reload()
+              window.location.href = '/login'
             }}
             className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition text-black dark:text-white"
           >
             Выйти
           </button>
-
         </div>
       </div>
 
