@@ -11,23 +11,39 @@ export default function TakeButton({ task, updateTaskLocal }: any) {
     if (loading) return
     setLoading(true)
 
-    const { data } = await supabase.auth.getUser()
-    const name = data.user?.user_metadata?.name || 'Сотрудник'
+    const { data, error } = await supabase.auth.getUser()
 
-    // ⚡ мгновенно обновляем UI
+    if (error || !data.user) {
+      alert('Ошибка пользователя')
+      setLoading(false)
+      return
+    }
+
+    // ✅ берем имя из metadata
+    const name =
+      data.user.user_metadata?.name?.trim() ||
+      data.user.user_metadata?.full_name?.trim() ||
+      'Без имени'
+
+    // ⚡ мгновенный UI
     updateTaskLocal(task.id, {
       status: 'taken',
       assigned_to: name,
     })
 
-    // 🔄 отправка в базу
-    await supabase
+    // 🔄 база
+    const { error: updateError } = await supabase
       .from('tasks')
       .update({
         status: 'taken',
         assigned_to: name,
       })
       .eq('id', task.id)
+
+    if (updateError) {
+      console.error(updateError)
+      alert('Ошибка обновления задачи')
+    }
 
     setLoading(false)
   }
