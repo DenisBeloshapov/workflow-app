@@ -94,7 +94,28 @@ export default function Page() {
   const inWork = filteredTasks.filter((t) => t.status === 'taken')
   const done = filteredTasks.filter((t) => t.status === 'done')
 
-  const TaskCard = ({ task }: any) => (
+  const TaskCard = ({ task }: any) => {
+  const handleUploadCheck = async (itemId: string, file: File) => {
+    const fileName = Date.now() + '_' + file.name.replace(/\s/g, '_')
+
+    await supabase.storage
+      .from('files')
+      .upload('checks/' + fileName, file)
+
+    await supabase
+      .from('task_items')
+      .update({ check_file: fileName })
+      .eq('id', itemId)
+
+    // локально обновляем
+    updateTaskLocal(task.id, {
+      task_items: task.task_items.map((i: any) =>
+        i.id === itemId ? { ...i, check_file: fileName } : i
+      ),
+    })
+  }
+
+  return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 10 }}
@@ -103,119 +124,135 @@ export default function Page() {
       transition={{ duration: 0.15 }}
       className="bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm"
     >
+      {/* ===== HEADER ===== */}
       <div className="flex justify-between items-start">
         <div className="font-semibold text-black dark:text-white">
           {task.body_number} {task.client_name}
         </div>
 
-        {task.priority && (
-          <div
-            className={
-              'text-xs px-4 py-1.5 rounded-full font-medium ' +
-              (task.priority === 'high'
-                ? 'bg-red-500/80 text-white'
-                : task.priority === 'medium'
-                ? 'bg-yellow-400/80 text-white'
-                : 'bg-green-400/80 text-white')
-            }
-          >
-            {task.priority === 'high'
-              ? 'Срочно'
+        <div
+          className={
+            'text-xs px-4 py-1.5 rounded-full font-medium ' +
+            (task.priority === 'high'
+              ? 'bg-red-500/80 text-white'
               : task.priority === 'medium'
-              ? 'Средняя'
-              : 'Низкая'}
-          </div>
-        )}
+              ? 'bg-yellow-400/80 text-white'
+              : 'bg-green-400/80 text-white')
+          }
+        >
+          {task.priority === 'high'
+            ? 'Срочно'
+            : task.priority === 'medium'
+            ? 'Средняя'
+            : 'Низкая'}
+        </div>
       </div>
 
+      {/* ===== ОТДЕЛ ===== */}
       <div className="text-xs text-gray-400 mt-2">
         {getDepartmentName(task.type)}
       </div>
 
+      {/* ===== COMMENT ===== */}
       {task.comment && (
         <div className="mt-3 text-sm bg-gray-100 dark:bg-zinc-700 p-2 rounded-lg whitespace-pre-line">
           {task.comment}
         </div>
       )}
 
-      {task.assigned_to && (
-        <div className="text-xs mt-1 font-medium text-[#0131FF]">
-          👤 {task.assigned_to}
-        </div>
-      )}
-
-      {/* ===== ОПЛАТА ===== */}
-      {task.type === 'payment' && (
+      {/* ===== PAYMENT ITEMS ===== */}
+      {task.type === 'payment' && task.task_items?.length > 0 && (
         <div className="mt-3 space-y-2">
-          {task.task_items?.map((item: any) => (
+          {task.task_items.map((item: any) => (
             <div
               key={item.id}
-              className="border p-2 rounded text-sm space-y-1"
+              className="border rounded-lg p-2 text-sm bg-white dark:bg-zinc-900"
             >
-              <div>
+              <div className="font-medium">
                 {item.body_number} {item.client_name}
               </div>
 
-              <div className="flex gap-3 text-[#0131FF] text-xs">
+              <div className="flex gap-3 mt-2 flex-wrap">
 
-                {/* СЧЕТ */}
+                {/* 📥 СЧЕТ */}
                 {item.invoice_file && (
                   <a
-                    href={getFileUrl('invoices/' + item.invoice_file)}
+                    href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/invoices/${item.invoice_file}`}
                     target="_blank"
+                    className="text-[#0131FF]"
                   >
                     📥 Счет
                   </a>
                 )}
 
-                {/* ЧЕК СКАЧАТЬ */}
-                {item.check_file && (
-                  <a
-                    href={getFileUrl('checks/' + item.check_file)}
-                    target="_blank"
-                  >
-                    📥 Чек
-                  </a>
+                {/* 📤 ЗАГРУЗКА ЧЕКА */}
+                {!item.check_file && (
+                  <label className="text-[#0131FF] cursor-pointer">
+                    📤 Чек
+                    <input
+                      type="file"
+                      hidden
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) handleUploadCheck(item.id, file)
+                      }}
+                    />
+                  </label>
                 )}
 
-                {/* ЧЕК ЗАГРУЗИТЬ / ПЕРЕЗАПИСАТЬ */}
-                <label className="cursor-pointer">
-                  📤 Чек
-                  <input
-                    type="file"
-                    hidden
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) handleUploadCheck(item, file)
-                    }}
-                  />
-                </label>
-
-                {item.is_paid && '✅'}
+                {/* 📥 СКАЧАТЬ ЧЕК */}
+                {item.check_file && (
+                  <a
+                    href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/checks/${item.check_file}`}
+                    target="_blank"
+                    className="text-green-600"
+                  >
+                    ✅ Чек
+                  </a>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
 
+      {/* ===== МЕНЕДЖЕР ===== */}
+      {task.assigned_to && (
+        <div className="text-xs mt-2 font-medium text-[#0131FF]">
+          👤 {task.assigned_to}
+        </div>
+      )}
+
+      {/* ===== BUTTONS ===== */}
       <div className="mt-4 flex gap-2">
         {task.status === 'created' && (
           <TakeButton task={task} updateTaskLocal={updateTaskLocal} />
         )}
 
         {task.status === 'taken' && (
-          <MoveButton task={task} status="done" label="Готово" updateTaskLocal={updateTaskLocal} />
+          <MoveButton
+            task={task}
+            status="done"
+            label="Готово"
+            updateTaskLocal={updateTaskLocal}
+          />
         )}
 
         {task.status === 'done' && (
           <>
             <ReturnButton task={task} updateTaskLocal={updateTaskLocal} />
-            <MoveButton task={task} status="closed" label="В архив" updateTaskLocal={updateTaskLocal} />
+            <MoveButton
+              task={task}
+              status="closed"
+              label="В архив"
+              updateTaskLocal={updateTaskLocal}
+            />
           </>
         )}
       </div>
     </motion.div>
   )
+}
 
   const Column = ({ title, items }: any) => (
     <div className="relative p-4 rounded-2xl bg-gray-200 dark:bg-zinc-900 overflow-hidden">
