@@ -12,7 +12,7 @@ export default function CreateTaskModal() {
   const [priority, setPriority] = useState('low')
   const [bulkText, setBulkText] = useState('')
 
-  // 📎 файл для оформления / паспорта
+  // 📎 файл
   const [file, setFile] = useState<File | null>(null)
   const [fileLoading, setFileLoading] = useState(false)
 
@@ -31,6 +31,14 @@ export default function CreateTaskModal() {
     setItems([...items, { text: '', invoice: null, loading: false }])
   }
 
+  const resetForm = () => {
+    setComment('')
+    setPriority('low')
+    setBulkText('')
+    setFile(null)
+    setItems([{ text: '', invoice: null, loading: false }])
+  }
+
   const handleCreate = async () => {
     // ===== ОФОРМЛЕНИЕ / ПАСПОРТА =====
     if (type === 'registration' || type === 'passport') {
@@ -40,6 +48,7 @@ export default function CreateTaskModal() {
 
       if (file) {
         setFileLoading(true)
+
         const fileName = Date.now() + '_' + file.name.replace(/\s/g, '_')
 
         const { error } = await supabase.storage
@@ -47,6 +56,7 @@ export default function CreateTaskModal() {
           .upload('docs/' + fileName, file)
 
         if (!error) filePath = fileName
+
         setFileLoading(false)
       }
 
@@ -61,7 +71,7 @@ export default function CreateTaskModal() {
           priority,
           status: 'created',
           type,
-          file: filePath, // ✅ сохраняем файл
+          file: filePath,
         })
       }
     }
@@ -113,7 +123,9 @@ export default function CreateTaskModal() {
       }
     }
 
-    location.reload()
+    // ✅ ЗАКРЫВАЕМ + СБРАСЫВАЕМ
+    resetForm()
+    setOpen(false)
   }
 
   return (
@@ -157,10 +169,10 @@ export default function CreateTaskModal() {
                 <textarea
                   placeholder="Комментарий"
                   className="w-full border p-2 rounded"
+                  value={comment}
                   onChange={(e) => setComment(e.target.value)}
                 />
 
-                {/* 📤 загрузка файла */}
                 <label className="text-[#0131FF] text-sm cursor-pointer">
                   📤 Загрузить файл
                   <input
@@ -171,7 +183,9 @@ export default function CreateTaskModal() {
                 </label>
 
                 {fileLoading && (
-                  <div className="text-xs text-gray-400">Загрузка файла...</div>
+                  <div className="text-xs text-gray-400">
+                    Загрузка файла...
+                  </div>
                 )}
 
                 <div className="flex gap-3">
@@ -236,6 +250,7 @@ export default function CreateTaskModal() {
                 <textarea
                   placeholder="Комментарий"
                   className="w-full border p-2 rounded"
+                  value={comment}
                   onChange={(e) => setComment(e.target.value)}
                 />
               </>
