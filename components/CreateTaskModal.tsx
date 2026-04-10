@@ -10,9 +10,13 @@ export default function CreateTaskModal() {
 
   const [comment, setComment] = useState('')
   const [priority, setPriority] = useState('low')
-
   const [bulkText, setBulkText] = useState('')
 
+  // 📎 файл для оформления / паспорта
+  const [file, setFile] = useState<File | null>(null)
+  const [fileLoading, setFileLoading] = useState(false)
+
+  // PAYMENT
   const [items, setItems] = useState<any[]>([
     { text: '', invoice: null, loading: false },
   ])
@@ -28,9 +32,23 @@ export default function CreateTaskModal() {
   }
 
   const handleCreate = async () => {
-    // ОФОРМЛЕНИЕ / ПАСПОРТА
+    // ===== ОФОРМЛЕНИЕ / ПАСПОРТА =====
     if (type === 'registration' || type === 'passport') {
       const lines = bulkText.split('\n').filter(Boolean)
+
+      let filePath = null
+
+      if (file) {
+        setFileLoading(true)
+        const fileName = Date.now() + '_' + file.name.replace(/\s/g, '_')
+
+        const { error } = await supabase.storage
+          .from('files')
+          .upload('docs/' + fileName, file)
+
+        if (!error) filePath = fileName
+        setFileLoading(false)
+      }
 
       for (const line of lines) {
         const [body, ...nameParts] = line.trim().split(' ')
@@ -43,11 +61,12 @@ export default function CreateTaskModal() {
           priority,
           status: 'created',
           type,
+          file: filePath, // ✅ сохраняем файл
         })
       }
     }
 
-    // ОПЛАТА
+    // ===== ОПЛАТА =====
     if (type === 'payment') {
       const { data: task } = await supabase
         .from('tasks')
@@ -117,9 +136,7 @@ export default function CreateTaskModal() {
                   onClick={() => setType(btn.key as any)}
                   className={
                     'px-3 py-1.5 text-sm rounded-full border ' +
-                    (type === btn.key
-                      ? 'bg-black text-white'
-                      : 'bg-white')
+                    (type === btn.key ? 'bg-black text-white' : 'bg-white')
                   }
                 >
                   {btn.label}
@@ -127,6 +144,7 @@ export default function CreateTaskModal() {
               ))}
             </div>
 
+            {/* ===== ОФОРМЛЕНИЕ / ПАСПОРТА ===== */}
             {(type === 'registration' || type === 'passport') && (
               <>
                 <textarea
@@ -142,6 +160,20 @@ export default function CreateTaskModal() {
                   onChange={(e) => setComment(e.target.value)}
                 />
 
+                {/* 📤 загрузка файла */}
+                <label className="text-[#0131FF] text-sm cursor-pointer">
+                  📤 Загрузить файл
+                  <input
+                    type="file"
+                    hidden
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  />
+                </label>
+
+                {fileLoading && (
+                  <div className="text-xs text-gray-400">Загрузка файла...</div>
+                )}
+
                 <div className="flex gap-3">
                   {['high', 'medium', 'low'].map((p) => (
                     <label key={p}>
@@ -149,18 +181,19 @@ export default function CreateTaskModal() {
                         type="radio"
                         checked={priority === p}
                         onChange={() => setPriority(p)}
-                      /> {p}
+                      />{' '}
+                      {p}
                     </label>
                   ))}
                 </div>
               </>
             )}
 
+            {/* ===== ОПЛАТА ===== */}
             {type === 'payment' && (
               <>
                 {items.map((item, i) => (
                   <div key={i} className="border p-3 rounded space-y-2">
-
                     <input
                       placeholder="WB1234 Иванов Иван"
                       className="w-full border p-2 rounded"
@@ -176,7 +209,11 @@ export default function CreateTaskModal() {
                         type="file"
                         hidden
                         onChange={(e) =>
-                          updateItem(i, 'invoice', e.target.files?.[0] || null)
+                          updateItem(
+                            i,
+                            'invoice',
+                            e.target.files?.[0] || null
+                          )
                         }
                       />
                     </label>
@@ -208,12 +245,8 @@ export default function CreateTaskModal() {
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Отмена
               </Button>
-
-              <Button onClick={handleCreate}>
-                Создать
-              </Button>
+              <Button onClick={handleCreate}>Создать</Button>
             </div>
-
           </div>
         </div>
       )}
