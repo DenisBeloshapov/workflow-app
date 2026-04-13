@@ -30,9 +30,9 @@ export default function Page() {
 
     checkUser()
 
-    // ✅ REALTIME (стабильный)
+    // ✅ стабильный realtime
     const channel = supabase
-      .channel('realtime-tasks')
+      .channel('tasks-live')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tasks' },
@@ -43,18 +43,10 @@ export default function Page() {
         { event: '*', schema: 'public', table: 'task_items' },
         () => fetchTasks()
       )
-      .subscribe((status) => {
-        console.log('REALTIME STATUS:', status)
-      })
-
-    
-
-    // ✅ добивка после подключения
-    setTimeout(fetchTasks, 1500)
+      .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
-      
     }
   }, [])
 
@@ -74,6 +66,21 @@ export default function Page() {
     )
   }
 
+  const updateItemLocal = (taskId: string, itemId: string, updates: any) => {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              task_items: t.task_items.map((i: any) =>
+                i.id === itemId ? { ...i, ...updates } : i
+              ),
+            }
+          : t
+      )
+    )
+  }
+
   const getDepartmentName = (dep: string) => {
     if (!dep) return ''
     if (dep.includes('payment')) return 'Оплата'
@@ -90,31 +97,15 @@ export default function Page() {
   const done = filteredTasks.filter((t) => t.status === 'done')
 
   const TaskCard = ({ task }: any) => {
-    const handleUploadCheck = async (itemId: string, file: File) => {
-      updateTaskLocal(task.id, {
-        task_items: task.task_items.map((i: any) =>
-          i.id === itemId ? { ...i, loading: true } : i
-        ),
-      })
+    const markPaid = async (itemId: string) => {
+      // ⚡ мгновенно
+      updateItemLocal(task.id, itemId, { is_paid: true })
 
-      const fileName = Date.now() + '_' + file.name.replace(/\s/g, '_')
-
-      await supabase.storage
-        .from('files')
-        .upload('checks/' + fileName, file)
-
+      // 💾 база
       await supabase
         .from('task_items')
-        .update({ check_file: fileName })
+        .update({ is_paid: true })
         .eq('id', itemId)
-
-      updateTaskLocal(task.id, {
-        task_items: task.task_items.map((i: any) =>
-          i.id === itemId
-            ? { ...i, check_file: fileName, loading: false }
-            : i
-        ),
-      })
     }
 
     return (
@@ -122,110 +113,63 @@ export default function Page() {
         layout
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        whileHover={{ y: -4, scale: 1.01 }}
-        transition={{ duration: 0.15 }}
-        className="bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm"
+        className="bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl border shadow-sm"
       >
-        <div className="flex justify-between items-start">
-          <div className="font-semibold text-black dark:text-white">
+        <div className="flex justify-between">
+          <div className="font-semibold">
             {task.body_number} {task.client_name}
           </div>
 
-          <div
-            className={
-              'text-xs px-4 py-1.5 rounded-full font-medium ' +
-              (task.priority === 'high'
-                ? 'bg-red-500/80 text-white'
-                : task.priority === 'medium'
-                ? 'bg-yellow-400/80 text-white'
-                : 'bg-green-400/80 text-white')
-            }
-          >
+          <div className="text-xs">
             {task.priority === 'high'
-              ? 'Срочно'
+              ? '🔴 Срочно'
               : task.priority === 'medium'
-              ? 'Средняя'
-              : 'Низкая'}
+              ? '🟡 Средняя'
+              : '🟢 Низкая'}
           </div>
         </div>
 
-        <div className="text-xs text-gray-400 mt-2">
+        <div className="text-xs text-gray-400 mt-1">
           {getDepartmentName(task.type)}
         </div>
 
         {task.comment && (
-          <div className="mt-3 text-sm bg-gray-100 dark:bg-zinc-700 p-2 rounded-lg whitespace-pre-line">
+          <div className="mt-2 text-sm bg-gray-100 dark:bg-zinc-700 p-2 rounded">
             {task.comment}
           </div>
         )}
 
-        {(task.type === 'registration' || task.type === 'passport') &&
-          task.file && (
-            <a
-              href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/docs/${task.file}`}
-              target="_blank"
-              className="text-[#0131FF] text-sm mt-2 inline-block"
-            >
-              📥 Скачать файл
-            </a>
-          )}
-
+        {/* возврат */}
         {task.return_comment && (
           <div className="mt-2 text-xs text-red-500">
-            ↩ Причина возврата: {task.return_comment}
+            ↩ {task.return_comment}
           </div>
         )}
 
-        {task.type === 'payment' && task.task_items?.length > 0 && (
+        {/* PAYMENT */}
+        {task.type === 'payment' && (
           <div className="mt-3 space-y-2">
-            {task.task_items.map((item: any) => (
+            {task.task_items?.map((item: any) => (
               <div
                 key={item.id}
-                className="border rounded-lg p-2 text-sm bg-white dark:bg-zinc-900"
+                className="border rounded p-2 text-sm bg-white dark:bg-zinc-900"
               >
-                <div className="font-medium">
+                <div>
                   {item.body_number} {item.client_name}
                 </div>
 
-                <div className="flex gap-3 mt-2 flex-wrap">
-                  {item.invoice_file && (
-                    <a
-                      href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/invoices/${item.invoice_file}`}
-                      target="_blank"
+                <div className="mt-2">
+                  {!item.is_paid ? (
+                    <button
+                      onClick={() => markPaid(item.id)}
                       className="text-[#0131FF]"
                     >
-                      📥 Счет
-                    </a>
-                  )}
-
-                  {!item.check_file && !item.loading && (
-                    <label className="text-[#0131FF] cursor-pointer">
-                      📤 Чек
-                      <input
-                        type="file"
-                        hidden
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) handleUploadCheck(item.id, file)
-                        }}
-                      />
-                    </label>
-                  )}
-
-                  {item.loading && (
-                    <span className="text-gray-400 text-sm">
-                      Загрузка...
+                      ✔ Отметить как оплачено
+                    </button>
+                  ) : (
+                    <span className="text-green-600">
+                      ✅ Оплачено
                     </span>
-                  )}
-
-                  {item.check_file && (
-                    <a
-                      href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/checks/${item.check_file}`}
-                      target="_blank"
-                      className="text-green-600"
-                    >
-                      ✅ Чек
-                    </a>
                   )}
                 </div>
               </div>
@@ -234,12 +178,12 @@ export default function Page() {
         )}
 
         {task.assigned_to && (
-          <div className="text-xs mt-2 font-medium text-[#0131FF]">
+          <div className="text-xs mt-2 text-[#0131FF]">
             👤 {task.assigned_to}
           </div>
         )}
 
-        <div className="mt-4 flex gap-2">
+        <div className="mt-3 flex gap-2">
           {task.status === 'created' && (
             <TakeButton task={task} updateTaskLocal={updateTaskLocal} />
           )}
@@ -270,44 +214,30 @@ export default function Page() {
   }
 
   const Column = ({ title, items }: any) => (
-    <div className="relative p-4 rounded-2xl bg-gray-200 dark:bg-zinc-900 overflow-hidden">
-      <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(#888_1px,transparent_1px)] [background-size:18px_18px]" />
+    <div className="p-4 rounded-2xl bg-gray-200 dark:bg-zinc-900">
+      <div className="flex justify-between mb-3">
+        <h2>{title}</h2>
+        <span>{items.length}</span>
+      </div>
 
-      <div className="relative z-10">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-            {title}
-          </h2>
-
-          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-300 dark:bg-zinc-700">
-            {items.length}
-          </span>
-        </div>
-
-        <div className="space-y-3">
-          {items.map((t: any) => (
-            <TaskCard key={t.id} task={t} />
-          ))}
-        </div>
+      <div className="space-y-3">
+        {items.map((t: any) => (
+          <TaskCard key={t.id} task={t} />
+        ))}
       </div>
     </div>
   )
 
   return (
-    <div className="p-6 min-h-screen bg-gray-100 dark:!bg-[#1A1A1A]">
-      <div className="flex justify-between mb-6 items-center">
-        <div>
-          <h1 className="text-2xl font-semibold">Задачи</h1>
-          <div className="text-sm text-gray-400">
-            Управление процессами
-          </div>
-        </div>
+    <div className="p-6">
+      <div className="flex justify-between mb-6">
+        <h1 className="text-2xl">Задачи</h1>
 
         <div className="flex gap-2">
           <CreateTaskModal />
 
           <Link href="/archive">
-            <button className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition">
+            <button className="border px-3 py-1 rounded">
               Архив
             </button>
           </Link>
@@ -317,47 +247,27 @@ export default function Page() {
               onClick={() =>
                 setTheme(theme === 'dark' ? 'light' : 'dark')
               }
-              className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
+              className="border px-3 py-1 rounded"
             >
               {theme === 'dark' ? '☀️' : '🌙'}
             </button>
           )}
-
-          <button
-            onClick={async () => {
-              await supabase.auth.signOut()
-              window.location.href = '/login'
-            }}
-            className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
-          >
-            Выйти
-          </button>
         </div>
       </div>
 
-      <div className="flex gap-2 mb-6">
-        {[
-          { key: 'all', label: 'Все' },
-          { key: 'payment', label: 'Оплата' },
-          { key: 'registration', label: 'Оформление' },
-          { key: 'passport', label: 'Паспорта' },
-        ].map((btn) => (
+      <div className="flex gap-2 mb-4">
+        {['all', 'payment', 'registration', 'passport'].map((f) => (
           <button
-            key={btn.key}
-            onClick={() => setFilter(btn.key)}
-            className={
-              'px-3 py-1.5 text-sm rounded-full border transition ' +
-              (filter === btn.key
-                ? 'bg-black text-white'
-                : 'bg-white dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700')
-            }
+            key={f}
+            onClick={() => setFilter(f)}
+            className="border px-3 py-1 rounded"
           >
-            {btn.label}
+            {f}
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-3 gap-4">
         <Column title="Новые" items={newTasks} />
         <Column title="В работе" items={inWork} />
         <Column title="Готово" items={done} />
