@@ -47,8 +47,6 @@ export default function Page() {
         console.log('REALTIME STATUS:', status)
       })
 
-    // ✅ fallback (если realtime тупит)
-    const fallback = setInterval(fetchTasks, 5000)
 
     // ✅ добивка после подключения
     setTimeout(fetchTasks, 1500)
