@@ -1,4 +1,4 @@
- 'use client'
+'use client'
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -19,7 +19,7 @@ export default function Page() {
   useEffect(() => {
     setMounted(true)
 
-    const checkUser = async () => {
+    const init = async () => {
       const { data } = await supabase.auth.getUser()
       if (!data.user) {
         window.location.href = '/login'
@@ -28,33 +28,43 @@ export default function Page() {
       fetchTasks()
     }
 
-    checkUser()
+    init()
 
-    // ✅ REALTIME (стабильный)
+    // ✅ РЕАЛЬНЫЙ realtime без дерганий
     const channel = supabase
-      .channel('realtime-tasks')
+      .channel('tasks-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tasks' },
-        () => fetchTasks()
+        (payload) => {
+          setTasks((prev) => {
+            const updated = payload.new as any
+
+            if (payload.eventType === 'UPDATE') {
+              return prev.map((t) =>
+                t.id === updated.id ? { ...t, ...updated } : t
+              )
+            }
+
+            if (payload.eventType === 'INSERT') {
+              return [updated, ...prev]
+            }
+
+            return prev
+          })
+        }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'task_items' },
-        () => fetchTasks()
+        () => {
+          fetchTasks() // только для вложенных элементов
+        }
       )
-      .subscribe((status) => {
-        console.log('REALTIME STATUS:', status)
-      })
-
-    
-
-    // ✅ добивка после подключения
-    setTimeout(fetchTasks, 1500)
+      .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
-      
     }
   }, [])
 
@@ -74,6 +84,32 @@ export default function Page() {
     )
   }
 
+  const updateItemLocal = (taskId: string, itemId: string, updates: any) => {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id !== taskId) return t
+
+        return {
+          ...t,
+          task_items: (t.task_items || []).map((i: any) =>
+            i.id === itemId ? { ...i, ...updates } : i
+          ),
+        }
+      })
+    )
+  }
+
+  const markAsPaid = async (taskId: string, itemId: string) => {
+    // ⚡ мгновенно
+    updateItemLocal(taskId, itemId, { is_paid: true })
+
+    // 💾 база
+    await supabase
+      .from('task_items')
+      .update({ is_paid: true })
+      .eq('id', itemId)
+  }
+
   const getDepartmentName = (dep: string) => {
     if (!dep) return ''
     if (dep.includes('payment')) return 'Оплата'
@@ -90,33 +126,6 @@ export default function Page() {
   const done = filteredTasks.filter((t) => t.status === 'done')
 
   const TaskCard = ({ task }: any) => {
-    const handleUploadCheck = async (itemId: string, file: File) => {
-      updateTaskLocal(task.id, {
-        task_items: task.task_items.map((i: any) =>
-          i.id === itemId ? { ...i, loading: true } : i
-        ),
-      })
-
-      const fileName = Date.now() + '_' + file.name.replace(/\s/g, '_')
-
-      await supabase.storage
-        .from('files')
-        .upload('checks/' + fileName, file)
-
-      await supabase
-        .from('task_items')
-        .update({ check_file: fileName })
-        .eq('id', itemId)
-
-      updateTaskLocal(task.id, {
-        task_items: task.task_items.map((i: any) =>
-          i.id === itemId
-            ? { ...i, check_file: fileName, loading: false }
-            : i
-        ),
-      })
-    }
-
     return (
       <motion.div
         layout
@@ -170,15 +179,17 @@ export default function Page() {
             </a>
           )}
 
+        {/* ✅ ВОЗВРАТЫ ВИДНЫ ВСЕМ */}
         {task.return_comment && (
           <div className="mt-2 text-xs text-red-500">
             ↩ Причина возврата: {task.return_comment}
           </div>
         )}
 
-        {task.type === 'payment' && task.task_items?.length > 0 && (
+        {/* ✅ ОПЛАТЫ */}
+        {task.type === 'payment' && (task.task_items || []).length > 0 && (
           <div className="mt-3 space-y-2">
-            {task.task_items.map((item: any) => (
+            {(task.task_items || []).map((item: any) => (
               <div
                 key={item.id}
                 className="border rounded-lg p-2 text-sm bg-white dark:bg-zinc-900"
@@ -187,7 +198,8 @@ export default function Page() {
                   {item.body_number} {item.client_name}
                 </div>
 
-                <div className="flex gap-3 mt-2 flex-wrap">
+                <div className="flex gap-3 mt-2 flex-wrap items-center">
+                  {/* СЧЕТ */}
                   {item.invoice_file && (
                     <a
                       href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/invoices/${item.invoice_file}`}
@@ -198,34 +210,21 @@ export default function Page() {
                     </a>
                   )}
 
-                  {!item.check_file && !item.loading && (
-                    <label className="text-[#0131FF] cursor-pointer">
-                      📤 Чек
-                      <input
-                        type="file"
-                        hidden
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) handleUploadCheck(item.id, file)
-                        }}
-                      />
-                    </label>
-                  )}
-
-                  {item.loading && (
-                    <span className="text-gray-400 text-sm">
-                      Загрузка...
-                    </span>
-                  )}
-
-                  {item.check_file && (
-                    <a
-                      href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/checks/${item.check_file}`}
-                      target="_blank"
-                      className="text-green-600"
+                  {/* ✅ КНОПКА ОПЛАЧЕНО */}
+                  {!item.is_paid && (
+                    <button
+                      onClick={() => markAsPaid(task.id, item.id)}
+                      className="text-sm px-2 py-1 rounded bg-green-500 text-white"
                     >
-                      ✅ Чек
-                    </a>
+                      Отметить оплаченным
+                    </button>
+                  )}
+
+                  {/* ✅ СТАТУС */}
+                  {item.is_paid && (
+                    <span className="text-green-600 text-sm">
+                      ✅ Оплачено
+                    </span>
                   )}
                 </div>
               </div>
@@ -365,4 +364,3 @@ export default function Page() {
     </div>
   )
 }
-
