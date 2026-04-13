@@ -35,7 +35,6 @@ export default function Page() {
     const channel = supabase
       .channel('realtime-tasks')
 
-      // ===== TASKS =====
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tasks' },
@@ -63,7 +62,6 @@ export default function Page() {
         }
       )
 
-      // ===== TASK ITEMS =====
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'task_items' },
@@ -107,7 +105,6 @@ export default function Page() {
 
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           if (!isRealtimeConnected) {
-            console.log('⚠️ fallback polling ON')
             setInterval(fetchTasks, 5000)
           }
         }
@@ -149,73 +146,105 @@ export default function Page() {
   const inWork = filteredTasks.filter((t) => t.status === 'taken')
   const done = filteredTasks.filter((t) => t.status === 'done')
 
-  const TaskCard = ({ task }: any) => {
-    const handleUploadCheck = async (itemId: string, file: File) => {
-      updateTaskLocal(task.id, {
-        task_items: task.task_items.map((i: any) =>
-          i.id === itemId ? { ...i, loading: true } : i
-        ),
-      })
+  const TaskCard = ({ task }: any) => (
+    <motion.div
+      layout
+      className="bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl border"
+    >
+      <div className="font-semibold">
+        {task.body_number} {task.client_name}
+      </div>
 
-      const fileName = Date.now() + '_' + file.name.replace(/\s/g, '_')
+      <div className="text-xs text-gray-400 mt-2">
+        {getDepartmentName(task.type)}
+      </div>
 
-      await supabase.storage.from('files').upload('checks/' + fileName, file)
+      {task.comment && (
+        <div className="mt-2 text-sm">{task.comment}</div>
+      )}
 
-      await supabase
-        .from('task_items')
-        .update({ check_file: fileName })
-        .eq('id', itemId)
-
-      updateTaskLocal(task.id, {
-        task_items: task.task_items.map((i: any) =>
-          i.id === itemId
-            ? { ...i, check_file: fileName, loading: false }
-            : i
-        ),
-      })
-    }
-
-    return (
-      <motion.div className="bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl border">
-        <div className="font-semibold">
-          {task.body_number} {task.client_name}
+      {task.assigned_to && (
+        <div className="text-xs mt-2 text-[#0131FF]">
+          👤 {task.assigned_to}
         </div>
+      )}
 
-        {task.assigned_to && (
-          <div className="text-xs mt-2 text-[#0131FF]">
-            👤 {task.assigned_to}
-          </div>
+      <div className="mt-4 flex gap-2">
+        {task.status === 'created' && (
+          <TakeButton task={task} updateTaskLocal={updateTaskLocal} />
         )}
 
-        <div className="mt-4 flex gap-2">
-          {task.status === 'created' && (
-            <TakeButton task={task} updateTaskLocal={updateTaskLocal} />
-          )}
+        {task.status === 'taken' && (
+          <MoveButton
+            task={task}
+            status="done"
+            label="Готово"
+            updateTaskLocal={updateTaskLocal}
+          />
+        )}
 
-          {task.status === 'taken' && (
+        {task.status === 'done' && (
+          <>
+            <ReturnButton task={task} updateTaskLocal={updateTaskLocal} />
             <MoveButton
               task={task}
-              status="done"
-              label="Готово"
+              status="closed"
+              label="В архив"
               updateTaskLocal={updateTaskLocal}
             />
+          </>
+        )}
+      </div>
+    </motion.div>
+  )
+
+  const Column = ({ title, items }: any) => (
+    <div className="p-4 rounded-2xl bg-gray-200 dark:bg-zinc-900">
+      <h2 className="mb-3">{title}</h2>
+      <div className="space-y-3">
+        {items.map((t: any) => (
+          <TaskCard key={t.id} task={t} />
+        ))}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="p-6">
+      <div className="flex justify-between mb-6">
+        <CreateTaskModal />
+
+        <div className="flex gap-2">
+          <Link href="/archive">
+            <button>Архив</button>
+          </Link>
+
+          {mounted && (
+            <button
+              onClick={() =>
+                setTheme(theme === 'dark' ? 'light' : 'dark')
+              }
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
           )}
 
-          {task.status === 'done' && (
-            <>
-              <ReturnButton task={task} updateTaskLocal={updateTaskLocal} />
-              <MoveButton
-                task={task}
-                status="closed"
-                label="В архив"
-                updateTaskLocal={updateTaskLocal}
-              />
-            </>
-          )}
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut()
+              window.location.href = '/login'
+            }}
+          >
+            Выйти
+          </button>
         </div>
-      </motion.div>
-    )
-  }
+      </div>
 
-  return <div />
+      <div className="grid grid-cols-3 gap-6">
+        <Column title="Новые" items={newTasks} />
+        <Column title="В работе" items={inWork} />
+        <Column title="Готово" items={done} />
+      </div>
+    </div>
+  )
 }
