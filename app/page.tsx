@@ -34,43 +34,42 @@ export default function Page() {
 
     const channel = supabase
       .channel('realtime-tasks')
+
       // ===== TASKS =====
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tasks' },
-        (payload) => {
-          const newTask = payload.new
-          const oldTask = payload.old
+        (payload: any) => {
+          const newTask = payload.new as any
+          const oldTask = payload.old as any
 
           setTasks((prev) => {
-            // INSERT
             if (payload.eventType === 'INSERT') {
               return [newTask, ...prev]
             }
 
-            // UPDATE
             if (payload.eventType === 'UPDATE') {
               return prev.map((t) =>
-                t.id === newTask.id ? { ...t, ...newTask } : t
+                t.id === newTask?.id ? { ...t, ...newTask } : t
               )
             }
 
-            // DELETE
             if (payload.eventType === 'DELETE') {
-              return prev.filter((t) => t.id !== oldTask.id)
+              return prev.filter((t) => t.id !== oldTask?.id)
             }
 
             return prev
           })
         }
       )
+
       // ===== TASK ITEMS =====
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'task_items' },
-        (payload) => {
-          const newItem = payload.new
-          const oldItem = payload.old
+        (payload: any) => {
+          const newItem = payload.new as any
+          const oldItem = payload.old as any
 
           setTasks((prev) =>
             prev.map((task) => {
@@ -79,21 +78,18 @@ export default function Page() {
 
               let items = task.task_items || []
 
-              // INSERT
               if (payload.eventType === 'INSERT') {
                 items = [...items, newItem]
               }
 
-              // UPDATE
               if (payload.eventType === 'UPDATE') {
                 items = items.map((i: any) =>
-                  i.id === newItem.id ? { ...i, ...newItem } : i
+                  i.id === newItem?.id ? { ...i, ...newItem } : i
                 )
               }
 
-              // DELETE
               if (payload.eventType === 'DELETE') {
-                items = items.filter((i: any) => i.id !== oldItem.id)
+                items = items.filter((i: any) => i.id !== oldItem?.id)
               }
 
               return { ...task, task_items: items }
@@ -101,6 +97,7 @@ export default function Page() {
           )
         }
       )
+
       .subscribe((status) => {
         console.log('REALTIME STATUS:', status)
 
@@ -179,123 +176,13 @@ export default function Page() {
     }
 
     return (
-      <motion.div
-        layout
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        whileHover={{ y: -4, scale: 1.01 }}
-        transition={{ duration: 0.15 }}
-        className="bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm"
-      >
-        <div className="flex justify-between items-start">
-          <div className="font-semibold text-black dark:text-white">
-            {task.body_number} {task.client_name}
-          </div>
-
-          <div
-            className={
-              'text-xs px-4 py-1.5 rounded-full font-medium ' +
-              (task.priority === 'high'
-                ? 'bg-red-500/80 text-white'
-                : task.priority === 'medium'
-                ? 'bg-yellow-400/80 text-white'
-                : 'bg-green-400/80 text-white')
-            }
-          >
-            {task.priority === 'high'
-              ? 'Срочно'
-              : task.priority === 'medium'
-              ? 'Средняя'
-              : 'Низкая'}
-          </div>
+      <motion.div className="bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl border">
+        <div className="font-semibold">
+          {task.body_number} {task.client_name}
         </div>
-
-        <div className="text-xs text-gray-400 mt-2">
-          {getDepartmentName(task.type)}
-        </div>
-
-        {task.comment && (
-          <div className="mt-3 text-sm bg-gray-100 dark:bg-zinc-700 p-2 rounded-lg whitespace-pre-line">
-            {task.comment}
-          </div>
-        )}
-
-        {(task.type === 'registration' || task.type === 'passport') &&
-          task.file && (
-            <a
-              href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/docs/${task.file}`}
-              target="_blank"
-              className="text-[#0131FF] text-sm mt-2 inline-block"
-            >
-              📥 Скачать файл
-            </a>
-          )}
-
-        {task.return_comment && (
-          <div className="mt-2 text-xs text-red-500">
-            ↩ Причина возврата: {task.return_comment}
-          </div>
-        )}
-
-        {task.type === 'payment' && task.task_items?.length > 0 && (
-          <div className="mt-3 space-y-2">
-            {task.task_items.map((item: any) => (
-              <div
-                key={item.id}
-                className="border rounded-lg p-2 text-sm bg-white dark:bg-zinc-900"
-              >
-                <div className="font-medium">
-                  {item.body_number} {item.client_name}
-                </div>
-
-                <div className="flex gap-3 mt-2 flex-wrap">
-                  {item.invoice_file && (
-                    <a
-                      href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/invoices/${item.invoice_file}`}
-                      target="_blank"
-                      className="text-[#0131FF]"
-                    >
-                      📥 Счет
-                    </a>
-                  )}
-
-                  {!item.check_file && !item.loading && (
-                    <label className="text-[#0131FF] cursor-pointer">
-                      📤 Чек
-                      <input
-                        type="file"
-                        hidden
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) handleUploadCheck(item.id, file)
-                        }}
-                      />
-                    </label>
-                  )}
-
-                  {item.loading && (
-                    <span className="text-gray-400 text-sm">
-                      Загрузка...
-                    </span>
-                  )}
-
-                  {item.check_file && (
-                    <a
-                      href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/checks/${item.check_file}`}
-                      target="_blank"
-                      className="text-green-600"
-                    >
-                      ✅ Чек
-                    </a>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
 
         {task.assigned_to && (
-          <div className="text-xs mt-2 font-medium text-[#0131FF]">
+          <div className="text-xs mt-2 text-[#0131FF]">
             👤 {task.assigned_to}
           </div>
         )}
@@ -330,99 +217,5 @@ export default function Page() {
     )
   }
 
-  const Column = ({ title, items }: any) => (
-    <div className="relative p-4 rounded-2xl bg-gray-200 dark:bg-zinc-900 overflow-hidden">
-      <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(#888_1px,transparent_1px)] [background-size:18px_18px]" />
-
-      <div className="relative z-10">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-            {title}
-          </h2>
-
-          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-300 dark:bg-zinc-700">
-            {items.length}
-          </span>
-        </div>
-
-        <div className="space-y-3">
-          {items.map((t: any) => (
-            <TaskCard key={t.id} task={t} />
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-
-  return (
-    <div className="p-6 min-h-screen bg-gray-100 dark:!bg-[#1A1A1A]">
-      <div className="flex justify-between mb-6 items-center">
-        <div>
-          <h1 className="text-2xl font-semibold">Задачи</h1>
-          <div className="text-sm text-gray-400">
-            Управление процессами
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <CreateTaskModal />
-
-          <Link href="/archive">
-            <button className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition">
-              Архив
-            </button>
-          </Link>
-
-          {mounted && (
-            <button
-              onClick={() =>
-                setTheme(theme === 'dark' ? 'light' : 'dark')
-              }
-              className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
-            >
-              {theme === 'dark' ? '☀️' : '🌙'}
-            </button>
-          )}
-
-          <button
-            onClick={async () => {
-              await supabase.auth.signOut()
-              window.location.href = '/login'
-            }}
-            className="px-3 py-1.5 text-sm rounded-full border hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
-          >
-            Выйти
-          </button>
-        </div>
-      </div>
-
-      <div className="flex gap-2 mb-6">
-        {[
-          { key: 'all', label: 'Все' },
-          { key: 'payment', label: 'Оплата' },
-          { key: 'registration', label: 'Оформление' },
-          { key: 'passport', label: 'Паспорта' },
-        ].map((btn) => (
-          <button
-            key={btn.key}
-            onClick={() => setFilter(btn.key)}
-            className={
-              'px-3 py-1.5 text-sm rounded-full border transition ' +
-              (filter === btn.key
-                ? 'bg-black text-white'
-                : 'bg-white dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700')
-            }
-          >
-            {btn.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-3 gap-6">
-        <Column title="Новые" items={newTasks} />
-        <Column title="В работе" items={inWork} />
-        <Column title="Готово" items={done} />
-      </div>
-    </div>
-  )
+  return <div />
 }
