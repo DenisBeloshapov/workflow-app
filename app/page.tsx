@@ -30,32 +30,94 @@ export default function Page() {
 
     checkUser()
 
-    // ✅ REALTIME (стабильный)
+    let isRealtimeConnected = false
+
     const channel = supabase
       .channel('realtime-tasks')
+      // ===== TASKS =====
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tasks' },
-        () => fetchTasks()
+        (payload) => {
+          const newTask = payload.new
+          const oldTask = payload.old
+
+          setTasks((prev) => {
+            // INSERT
+            if (payload.eventType === 'INSERT') {
+              return [newTask, ...prev]
+            }
+
+            // UPDATE
+            if (payload.eventType === 'UPDATE') {
+              return prev.map((t) =>
+                t.id === newTask.id ? { ...t, ...newTask } : t
+              )
+            }
+
+            // DELETE
+            if (payload.eventType === 'DELETE') {
+              return prev.filter((t) => t.id !== oldTask.id)
+            }
+
+            return prev
+          })
+        }
       )
+      // ===== TASK ITEMS =====
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'task_items' },
-        () => fetchTasks()
+        (payload) => {
+          const newItem = payload.new
+          const oldItem = payload.old
+
+          setTasks((prev) =>
+            prev.map((task) => {
+              if (task.id !== (newItem?.task_id || oldItem?.task_id))
+                return task
+
+              let items = task.task_items || []
+
+              // INSERT
+              if (payload.eventType === 'INSERT') {
+                items = [...items, newItem]
+              }
+
+              // UPDATE
+              if (payload.eventType === 'UPDATE') {
+                items = items.map((i: any) =>
+                  i.id === newItem.id ? { ...i, ...newItem } : i
+                )
+              }
+
+              // DELETE
+              if (payload.eventType === 'DELETE') {
+                items = items.filter((i: any) => i.id !== oldItem.id)
+              }
+
+              return { ...task, task_items: items }
+            })
+          )
+        }
       )
       .subscribe((status) => {
         console.log('REALTIME STATUS:', status)
+
+        if (status === 'SUBSCRIBED') {
+          isRealtimeConnected = true
+        }
+
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          if (!isRealtimeConnected) {
+            console.log('⚠️ fallback polling ON')
+            setInterval(fetchTasks, 5000)
+          }
+        }
       })
-
-    // ✅ fallback (если realtime тупит)
-    const fallback = setInterval(fetchTasks, 5000)
-
-    // ✅ добивка после подключения
-    setTimeout(fetchTasks, 1500)
 
     return () => {
       supabase.removeChannel(channel)
-      clearInterval(fallback)
     }
   }, [])
 
@@ -100,9 +162,7 @@ export default function Page() {
 
       const fileName = Date.now() + '_' + file.name.replace(/\s/g, '_')
 
-      await supabase.storage
-        .from('files')
-        .upload('checks/' + fileName, file)
+      await supabase.storage.from('files').upload('checks/' + fileName, file)
 
       await supabase
         .from('task_items')
