@@ -30,15 +30,32 @@ export default function Page() {
 
     checkUser()
 
-    // ✅ REALTIME
+    // ✅ REALTIME (стабильный)
     const channel = supabase
-      .channel('tasks-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, fetchTasks)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_items' }, fetchTasks)
-      .subscribe()
+      .channel('realtime-tasks')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks' },
+        () => fetchTasks()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'task_items' },
+        () => fetchTasks()
+      )
+      .subscribe((status) => {
+        console.log('REALTIME STATUS:', status)
+      })
+
+    // ✅ fallback (если realtime тупит)
+    const fallback = setInterval(fetchTasks, 5000)
+
+    // ✅ добивка после подключения
+    setTimeout(fetchTasks, 1500)
 
     return () => {
       supabase.removeChannel(channel)
+      clearInterval(fallback)
     }
   }, [])
 
@@ -110,7 +127,6 @@ export default function Page() {
         transition={{ duration: 0.15 }}
         className="bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm"
       >
-        {/* HEADER */}
         <div className="flex justify-between items-start">
           <div className="font-semibold text-black dark:text-white">
             {task.body_number} {task.client_name}
@@ -134,19 +150,16 @@ export default function Page() {
           </div>
         </div>
 
-        {/* ОТДЕЛ */}
         <div className="text-xs text-gray-400 mt-2">
           {getDepartmentName(task.type)}
         </div>
 
-        {/* COMMENT */}
         {task.comment && (
           <div className="mt-3 text-sm bg-gray-100 dark:bg-zinc-700 p-2 rounded-lg whitespace-pre-line">
             {task.comment}
           </div>
         )}
 
-        {/* 📎 ФАЙЛ (оформление / паспорта) */}
         {(task.type === 'registration' || task.type === 'passport') &&
           task.file && (
             <a
@@ -158,14 +171,12 @@ export default function Page() {
             </a>
           )}
 
-        {/* 🔴 ПРИЧИНА ВОЗВРАТА */}
         {task.return_comment && (
           <div className="mt-2 text-xs text-red-500">
             ↩ Причина возврата: {task.return_comment}
           </div>
         )}
 
-        {/* PAYMENT */}
         {task.type === 'payment' && task.task_items?.length > 0 && (
           <div className="mt-3 space-y-2">
             {task.task_items.map((item: any) => (
@@ -178,7 +189,6 @@ export default function Page() {
                 </div>
 
                 <div className="flex gap-3 mt-2 flex-wrap">
-                  {/* СЧЕТ */}
                   {item.invoice_file && (
                     <a
                       href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/invoices/${item.invoice_file}`}
@@ -189,7 +199,6 @@ export default function Page() {
                     </a>
                   )}
 
-                  {/* ЗАГРУЗКА ЧЕКА */}
                   {!item.check_file && !item.loading && (
                     <label className="text-[#0131FF] cursor-pointer">
                       📤 Чек
@@ -204,14 +213,12 @@ export default function Page() {
                     </label>
                   )}
 
-                  {/* LOADING */}
                   {item.loading && (
                     <span className="text-gray-400 text-sm">
                       Загрузка...
                     </span>
                   )}
 
-                  {/* СКАЧАТЬ ЧЕК */}
                   {item.check_file && (
                     <a
                       href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/checks/${item.check_file}`}
@@ -227,14 +234,12 @@ export default function Page() {
           </div>
         )}
 
-        {/* МЕНЕДЖЕР */}
         {task.assigned_to && (
           <div className="text-xs mt-2 font-medium text-[#0131FF]">
             👤 {task.assigned_to}
           </div>
         )}
 
-        {/* BUTTONS */}
         <div className="mt-4 flex gap-2">
           {task.status === 'created' && (
             <TakeButton task={task} updateTaskLocal={updateTaskLocal} />
@@ -331,7 +336,6 @@ export default function Page() {
         </div>
       </div>
 
-      {/* ФИЛЬТРЫ */}
       <div className="flex gap-2 mb-6">
         {[
           { key: 'all', label: 'Все' },
