@@ -31,42 +31,30 @@ export default function Page() {
     checkUser()
 
     // ✅ REALTIME (стабильный)
-    let isRealtimeConnected = false
+    const channel = supabase
+      .channel('realtime-tasks')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks' },
+        () => fetchTasks()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'task_items' },
+        () => fetchTasks()
+      )
+      .subscribe((status) => {
+        console.log('REALTIME STATUS:', status)
+      })
 
-const channel = supabase
-  .channel('realtime-tasks')
-  .on(
-    'postgres_changes',
-    { event: '*', schema: 'public', table: 'tasks' },
-    () => fetchTasks()
-  )
-  .on(
-    'postgres_changes',
-    { event: '*', schema: 'public', table: 'task_items' },
-    () => fetchTasks()
-  )
-  .subscribe((status) => {
-    console.log('REALTIME STATUS:', status)
-
-    if (status === 'SUBSCRIBED') {
-      isRealtimeConnected = true
-    }
-
-    // 🔴 если не подключился — включаем fallback
-    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-      if (!isRealtimeConnected) {
-        console.log('⚠️ fallback polling ON')
-        setInterval(fetchTasks, 5000)
-      }
-    }
-  })
-
+    
 
     // ✅ добивка после подключения
     setTimeout(fetchTasks, 1500)
 
     return () => {
       supabase.removeChannel(channel)
+      
     }
   }, [])
 
