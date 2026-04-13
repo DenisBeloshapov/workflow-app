@@ -67,7 +67,6 @@ const channel = supabase
 
     return () => {
       supabase.removeChannel(channel)
-      clearInterval(fallback)
     }
   }, [])
 
