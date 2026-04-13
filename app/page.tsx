@@ -33,15 +33,50 @@ export default function Page() {
     const channel = supabase
       .channel('realtime-tasks')
       .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
-        () => fetchTasks()
+  'postgres_changes',
+  { event: '*', schema: 'public', table: 'tasks' },
+  (payload: any) => {
+    const newTask = payload.new
+
+    if (!newTask) return
+
+    setTasks((prev) => {
+      const exists = prev.find((t) => t.id === newTask.id)
+
+      // INSERT
+      if (!exists) {
+        return [newTask, ...prev]
+      }
+
+      // UPDATE (включая return_comment)
+      return prev.map((t) =>
+        t.id === newTask.id ? { ...t, ...newTask } : t
       )
+    })
+  }
+)
       .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'task_items' },
-        () => fetchTasks()
+  'postgres_changes',
+  { event: '*', schema: 'public', table: 'task_items' },
+  (payload: any) => {
+    const newItem = payload.new
+
+    if (!newItem) return
+
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === newItem.task_id
+          ? {
+              ...task,
+              task_items: task.task_items.map((i: any) =>
+                i.id === newItem.id ? { ...i, ...newItem } : i
+              ),
+            }
+          : task
       )
+    )
+  }
+)
       .subscribe()
 
     setTimeout(fetchTasks, 1500)
