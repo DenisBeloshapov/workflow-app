@@ -19,20 +19,31 @@ export default function ReturnButton({ task, updateTaskLocal }: any) {
     if (loading) return
     setLoading(true)
 
-    // ⚡ локально
+    // ⚡ локально сразу (быстро)
     updateTaskLocal(task.id, {
       status: 'taken',
       return_comment: comment,
     })
 
     // 🔄 база
-    await supabase
+    const { error } = await supabase
       .from('tasks')
       .update({
         status: 'taken',
         return_comment: comment,
       })
       .eq('id', task.id)
+
+    if (error) {
+      console.error('RETURN ERROR:', error)
+    }
+
+    // 💥 ВАЖНО: форсим синк у всех
+    await supabase.channel('force-refresh').send({
+      type: 'broadcast',
+      event: 'refresh',
+      payload: {},
+    })
 
     setLoading(false)
     setOpen(false)
@@ -45,7 +56,6 @@ export default function ReturnButton({ task, updateTaskLocal }: any) {
         Вернуть
       </Button>
 
-      {/* ✅ РЕНДЕРИМ ЧЕРЕЗ PORTAL */}
       {mounted &&
         open &&
         createPortal(
