@@ -82,26 +82,6 @@ export default function Page() {
 
     let channel = setupChannel()
 
-    const handleError = () => {
-      console.error('❌ Ошибка realtime')
-      if (channel) {
-        supabase.removeChannel(channel)
-      }
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout)
-      }
-      reconnectTimeout = setTimeout(() => {
-        console.log('🔄 Попытка переподключения...')
-        channel = setupChannel()
-      }, 3000)
-    }
-
-    // Слушаем ошибки через посредника
-    const originalOn = channel.on.bind(channel)
-    channel.on = function (...args: any[]) {
-      return originalOn(...args)
-    }
-
     return () => {
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout)
