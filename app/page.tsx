@@ -59,16 +59,16 @@ export default function Page() {
           fetchTasks()
         }
       )
-      .on('subscribe', (status) => {
-        console.log('📡 Realtime подключено:', status)
+      .on('subscribe', () => {
+        console.log('📡 Realtime подключено')
         // Очищаем таймаут переподключения при успешном подключении
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current)
           reconnectTimeoutRef.current = null
         }
       })
-      .on('error', (error) => {
-        console.error('❌ Ошибка realtime:', error)
+      .on('error', () => {
+        console.error('❌ Ошибка realtime')
         // Пытаемся переподключиться через 3 сек
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current)
@@ -220,7 +220,7 @@ export default function Page() {
             </a>
           )}
 
-        {/* ✅ ВОЗВРА��Ы ВИДНЫ ВСЕМ */}
+        {/* ✅ ВОЗВРАТЫ ВИДНЫ ВСЕМ */}
         {task.return_comment && (
           <div className="mt-2 text-xs text-red-500">
             ↩ Причина возврата: {task.return_comment}
