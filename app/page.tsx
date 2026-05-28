@@ -67,15 +67,7 @@ export default function Page() {
             fetchTasks()
           }
         )
-        .subscribe((status: string) => {
-          if (status === 'SUBSCRIBED') {
-            console.log('📡 Realtime подключено')
-            if (reconnectTimeout) {
-              clearTimeout(reconnectTimeout)
-              reconnectTimeout = null
-            }
-          }
-        })
+        .subscribe()
 
       return channel
     }
@@ -234,7 +226,7 @@ export default function Page() {
                       onClick={() => markAsPaid(task.id, item.id)}
                       className="text-sm px-2 py-1 rounded bg-green-500 text-white"
                     >
-                      Отметить оплаченным
+                      Отмет��ть оплаченным
                     </button>
                   )}
 
