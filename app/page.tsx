@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import TakeButton from '@/components/TakeButton'
 import MoveButton from '@/components/MoveButton'
@@ -15,22 +15,15 @@ export default function Page() {
   const [filter, setFilter] = useState('all')
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
+  const channelRef = useRef<any>(null)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  useEffect(() => {
-    setMounted(true)
-
-    const init = async () => {
-      const { data } = await supabase.auth.getUser()
-      if (!data.user) {
-        window.location.href = '/login'
-        return
-      }
-      fetchTasks()
+  const setupRealtimeChannel = () => {
+    // Очищаем старый канал если есть
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current)
     }
 
-    init()
-
-    // ✅ РЕАЛЬНЫЙ realtime без дерганий
     const channel = supabase
       .channel('tasks-realtime')
       .on(
@@ -50,6 +43,10 @@ export default function Page() {
               return [updated, ...prev]
             }
 
+            if (payload.eventType === 'DELETE') {
+              return prev.filter((t) => t.id !== updated.id)
+            }
+
             return prev
           })
         }
@@ -58,13 +55,57 @@ export default function Page() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'task_items' },
         () => {
-          fetchTasks() // только для вложенных элементов
+          // Полностью перезагружаем для вложенных элементов
+          fetchTasks()
         }
       )
+      .on('subscribe', (status) => {
+        console.log('📡 Realtime подключено:', status)
+        // Очищаем таймаут переподключения при успешном подключении
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current)
+          reconnectTimeoutRef.current = null
+        }
+      })
+      .on('error', (error) => {
+        console.error('❌ Ошибка realtime:', error)
+        // Пытаемся переподключиться через 3 сек
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current)
+        }
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log('🔄 Попытка переподключения...')
+          setupRealtimeChannel()
+        }, 3000)
+      })
       .subscribe()
 
+    channelRef.current = channel
+  }
+
+  useEffect(() => {
+    setMounted(true)
+
+    const init = async () => {
+      const { data } = await supabase.auth.getUser()
+      if (!data.user) {
+        window.location.href = '/login'
+        return
+      }
+      fetchTasks()
+      setupRealtimeChannel()
+    }
+
+    init()
+
+    // Очистка при размонтировании
     return () => {
-      supabase.removeChannel(channel)
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
     }
   }, [])
 
@@ -179,7 +220,7 @@ export default function Page() {
             </a>
           )}
 
-        {/* ✅ ВОЗВРАТЫ ВИДНЫ ВСЕМ */}
+        {/* ✅ ВОЗВРА��Ы ВИДНЫ ВСЕМ */}
         {task.return_comment && (
           <div className="mt-2 text-xs text-red-500">
             ↩ Причина возврата: {task.return_comment}
