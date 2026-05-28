@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import TakeButton from '@/components/TakeButton'
 import MoveButton from '@/components/MoveButton'
@@ -15,73 +15,6 @@ export default function Page() {
   const [filter, setFilter] = useState('all')
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
-  const channelRef = useRef<any>(null)
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-  const setupRealtimeChannel = () => {
-    // Очищаем старый канал если есть
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current)
-    }
-
-    const channel = supabase
-      .channel('tasks-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
-        (payload) => {
-          setTasks((prev) => {
-            const updated = payload.new as any
-
-            if (payload.eventType === 'UPDATE') {
-              return prev.map((t) =>
-                t.id === updated.id ? { ...t, ...updated } : t
-              )
-            }
-
-            if (payload.eventType === 'INSERT') {
-              return [updated, ...prev]
-            }
-
-            if (payload.eventType === 'DELETE') {
-              return prev.filter((t) => t.id !== updated.id)
-            }
-
-            return prev
-          })
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'task_items' },
-        () => {
-          // Полностью перезагружаем для вложенных элементов
-          fetchTasks()
-        }
-      )
-      .on('subscribe', () => {
-        console.log('📡 Realtime подключено')
-        // Очищаем таймаут переподключения при успешном подключении
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current)
-          reconnectTimeoutRef.current = null
-        }
-      })
-      .on('error', () => {
-        console.error('❌ Ошибка realtime')
-        // Пытаемся переподключиться через 3 сек
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current)
-        }
-        reconnectTimeoutRef.current = setTimeout(() => {
-          console.log('🔄 Попытка переподключения...')
-          setupRealtimeChannel()
-        }, 3000)
-      })
-      .subscribe()
-
-    channelRef.current = channel
-  }
 
   useEffect(() => {
     setMounted(true)
@@ -93,18 +26,88 @@ export default function Page() {
         return
       }
       fetchTasks()
-      setupRealtimeChannel()
     }
 
     init()
 
-    // Очистка при размонтировании
-    return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
+    let reconnectTimeout: NodeJS.Timeout | null = null
+
+    const setupChannel = () => {
+      const channel = supabase
+        .channel('tasks-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tasks' },
+          (payload: any) => {
+            setTasks((prev) => {
+              const updated = payload.new as any
+
+              if (payload.eventType === 'UPDATE') {
+                return prev.map((t) =>
+                  t.id === updated.id ? { ...t, ...updated } : t
+                )
+              }
+
+              if (payload.eventType === 'INSERT') {
+                return [updated, ...prev]
+              }
+
+              if (payload.eventType === 'DELETE') {
+                return prev.filter((t) => t.id !== updated.id)
+              }
+
+              return prev
+            })
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'task_items' },
+          () => {
+            fetchTasks()
+          }
+        )
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('📡 Realtime подключено')
+            if (reconnectTimeout) {
+              clearTimeout(reconnectTimeout)
+              reconnectTimeout = null
+            }
+          }
+        })
+
+      return channel
+    }
+
+    let channel = setupChannel()
+
+    const handleError = () => {
+      console.error('❌ Ошибка realtime')
+      if (channel) {
+        supabase.removeChannel(channel)
       }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
+      reconnectTimeout = setTimeout(() => {
+        console.log('🔄 Попытка переподключения...')
+        channel = setupChannel()
+      }, 3000)
+    }
+
+    // Слушаем ошибки через посредника
+    const originalOn = channel.on.bind(channel)
+    channel.on = function (...args: any[]) {
+      return originalOn(...args)
+    }
+
+    return () => {
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
+      if (channel) {
+        supabase.removeChannel(channel)
       }
     }
   }, [])
@@ -141,10 +144,8 @@ export default function Page() {
   }
 
   const markAsPaid = async (taskId: string, itemId: string) => {
-    // ⚡ мгновенно
     updateItemLocal(taskId, itemId, { is_paid: true })
 
-    // 💾 база
     await supabase
       .from('task_items')
       .update({ is_paid: true })
@@ -220,14 +221,12 @@ export default function Page() {
             </a>
           )}
 
-        {/* ✅ ВОЗВРАТЫ ВИДНЫ ВСЕМ */}
         {task.return_comment && (
           <div className="mt-2 text-xs text-red-500">
             ↩ Причина возврата: {task.return_comment}
           </div>
         )}
 
-        {/* ✅ ОПЛАТЫ */}
         {task.type === 'payment' && (task.task_items || []).length > 0 && (
           <div className="mt-3 space-y-2">
             {(task.task_items || []).map((item: any) => (
@@ -240,7 +239,6 @@ export default function Page() {
                 </div>
 
                 <div className="flex gap-3 mt-2 flex-wrap items-center">
-                  {/* СЧЕТ */}
                   {item.invoice_file && (
                     <a
                       href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/invoices/${item.invoice_file}`}
@@ -251,7 +249,6 @@ export default function Page() {
                     </a>
                   )}
 
-                  {/* ✅ КНОПКА ОПЛАЧЕНО */}
                   {!item.is_paid && (
                     <button
                       onClick={() => markAsPaid(task.id, item.id)}
@@ -261,7 +258,6 @@ export default function Page() {
                     </button>
                   )}
 
-                  {/* ✅ СТАТУС */}
                   {item.is_paid && (
                     <span className="text-green-600 text-sm">
                       ✅ Оплачено
