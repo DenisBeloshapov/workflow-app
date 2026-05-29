@@ -19,35 +19,48 @@ export default function ReturnButton({ task, updateTaskLocal }: any) {
     if (loading) return
     setLoading(true)
 
-    // ⚡ локально сразу (быстро)
-    updateTaskLocal(task.id, {
-      status: 'taken',
-      return_comment: comment,
-    })
+    try {
+      // 🔄 база - с проверкой статуса (ATOMIC OPERATION)
+      const { data: updated, error } = await supabase
+        .from('tasks')
+        .update({
+          status: 'taken',
+          return_comment: comment,
+        })
+        .eq('id', task.id)
+        .eq('status', 'done') // ✅ Проверяем, что задача в статусе 'done'
+        .select()
+        .single()
 
-    // 🔄 база
-    const { error } = await supabase
-      .from('tasks')
-      .update({
+      if (error) {
+        console.error('RETURN ERROR:', error)
+        alert('Ошибка обновления задачи')
+        setLoading(false)
+        return
+      }
+
+      // ❌ Если updated null - статус уже изменился
+      if (!updated) {
+        alert('Статус задачи был изменен другим пользователем. Перезагружаю...')
+        window.location.reload()
+        setLoading(false)
+        return
+      }
+
+      // ✅ локально сразу (после успешного обновления)
+      updateTaskLocal(task.id, {
         status: 'taken',
         return_comment: comment,
       })
-      .eq('id', task.id)
 
-    if (error) {
-      console.error('RETURN ERROR:', error)
+      setLoading(false)
+      setOpen(false)
+      setComment('')
+    } catch (err) {
+      console.error('UNEXPECTED ERROR:', err)
+      alert('Неожиданная ошибка')
+      setLoading(false)
     }
-
-    // 💥 ВАЖНО: форсим синк у всех
-    await supabase.channel('force-refresh').send({
-      type: 'broadcast',
-      event: 'refresh',
-      payload: {},
-    })
-
-    setLoading(false)
-    setOpen(false)
-    setComment('')
   }
 
   return (
