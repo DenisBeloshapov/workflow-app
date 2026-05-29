@@ -16,16 +16,39 @@ export default function MoveButton({
     if (loading) return
     setLoading(true)
 
-    // ⚡ мгновенно
-    updateTaskLocal(task.id, { status })
+    try {
+      // 🔄 база - с проверкой текущего статуса (ATOMIC OPERATION)
+      const { data: updated, error } = await supabase
+        .from('tasks')
+        .update({ status })
+        .eq('id', task.id)
+        .eq('status', task.status) // ✅ Проверяем, что статус не изменился кем-то другим
+        .select()
+        .single()
 
-    // 🔄 база
-    await supabase
-      .from('tasks')
-      .update({ status })
-      .eq('id', task.id)
+      if (error) {
+        console.error('MOVE ERROR:', error)
+        alert('Ошибка обновления задачи')
+        setLoading(false)
+        return
+      }
 
-    setLoading(false)
+      // ❌ Если updated null - значит статус уже изменился
+      if (!updated) {
+        alert('Статус задачи был изменен другим пользователем. Перезагружаю...')
+        window.location.reload()
+        setLoading(false)
+        return
+      }
+
+      // ✅ мгновенно (только если обновление успешно)
+      updateTaskLocal(task.id, { status })
+    } catch (err) {
+      console.error('UNEXPECTED ERROR:', err)
+      alert('Неожиданная ошибка')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
