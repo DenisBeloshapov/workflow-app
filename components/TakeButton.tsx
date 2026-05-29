@@ -25,25 +25,39 @@ export default function TakeButton({ task, updateTaskLocal }: any) {
       data.user.user_metadata?.full_name?.trim() ||
       'Без имени'
 
-    // ⚡ мгновенный UI
-    updateTaskLocal(task.id, {
-      status: 'taken',
-      assigned_to: name,
-    })
-
-    // 🔄 база
-    const { error: updateError } = await supabase
+    // 🔄 база - с проверкой текущего статуса (ATOMIC OPERATION)
+    const { data: updated, error: updateError } = await supabase
       .from('tasks')
       .update({
         status: 'taken',
         assigned_to: name,
       })
       .eq('id', task.id)
+      .eq('status', 'created') // ✅ КРИТИЧНО: проверяем, что задача еще не взята!
+      .select()
+      .single()
 
     if (updateError) {
-      console.error(updateError)
+      console.error('TAKE ERROR:', updateError)
       alert('Ошибка обновления задачи')
+      setLoading(false)
+      return
     }
+
+    // ❌ Если updated null - значит кто-то другой уже взял задачу
+    if (!updated) {
+      alert('Эта задача уже кем-то взята!')
+      // Перезагружаем, чтобы увидеть актуальное состояние
+      window.location.reload()
+      setLoading(false)
+      return
+    }
+
+    // ✅ мгновенный UI (только если обновление прошло успешно)
+    updateTaskLocal(task.id, {
+      status: 'taken',
+      assigned_to: name,
+    })
 
     setLoading(false)
   }
