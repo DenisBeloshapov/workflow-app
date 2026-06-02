@@ -2,7 +2,7 @@
 
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { createPortal } from 'react-dom'
 import { useOptimisticUpdate } from '@/lib/realtime-sync'
 import { useTasksStore } from '@/lib/store'
@@ -11,7 +11,7 @@ interface ReturnButtonProps {
   taskId: string
 }
 
-export default function ReturnButton({ taskId }: ReturnButtonProps) {
+const ReturnButton = memo(function ReturnButton({ taskId }: ReturnButtonProps) {
   const [open, setOpen] = useState(false)
   const [comment, setComment] = useState('')
   const [loading, setLoading] = useState(false)
@@ -28,7 +28,6 @@ export default function ReturnButton({ taskId }: ReturnButtonProps) {
     setLoading(true)
 
     try {
-      // ✅ Optimistic update
       await updateTaskOptimistic(
         taskId,
         { status: 'taken', return_comment: comment },
@@ -45,8 +44,7 @@ export default function ReturnButton({ taskId }: ReturnButtonProps) {
             .single()
 
           if (error || !updated) {
-            alert('Статус задачи был изменен другим пользователем')
-            throw error || new Error('Status changed by another user')
+            throw new Error('Status changed by another user')
           }
         }
       )
@@ -55,6 +53,7 @@ export default function ReturnButton({ taskId }: ReturnButtonProps) {
       setComment('')
     } catch (err) {
       console.error('RETURN ERROR:', err)
+      alert('Ошибка при возврате задачи')
     } finally {
       setLoading(false)
     }
@@ -97,4 +96,6 @@ export default function ReturnButton({ taskId }: ReturnButtonProps) {
         )}
     </>
   )
-}
+})
+
+export default ReturnButton

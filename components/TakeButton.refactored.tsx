@@ -2,7 +2,7 @@
 
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, memo } from 'react'
 import { useOptimisticUpdate } from '@/lib/realtime-sync'
 import { useTasksStore } from '@/lib/store'
 
@@ -10,7 +10,7 @@ interface TakeButtonProps {
   taskId: string
 }
 
-export default function TakeButton({ taskId }: TakeButtonProps) {
+const TakeButton = memo(function TakeButton({ taskId }: TakeButtonProps) {
   const [loading, setLoading] = useState(false)
   const { updateTaskOptimistic } = useOptimisticUpdate()
   const task = useTasksStore((state) => state.getTask(taskId))
@@ -32,7 +32,6 @@ export default function TakeButton({ taskId }: TakeButtonProps) {
         data.user.user_metadata?.full_name?.trim() ||
         'Без имени'
 
-      // ✅ Optimistic update: update locally, sync with DB
       await updateTaskOptimistic(
         taskId,
         { status: 'taken', assigned_to: name },
@@ -49,13 +48,13 @@ export default function TakeButton({ taskId }: TakeButtonProps) {
             .single()
 
           if (updateError || !updated) {
-            alert('Эта задача уже кем-то взята!')
-            throw updateError || new Error('Task already taken')
+            throw new Error('Task already taken')
           }
         }
       )
     } catch (err) {
       console.error('TAKE ERROR:', err)
+      alert('Ошибка при взятии задачи')
     } finally {
       setLoading(false)
     }
@@ -68,4 +67,6 @@ export default function TakeButton({ taskId }: TakeButtonProps) {
       {loading ? '...' : 'Взять'}
     </Button>
   )
-}
+})
+
+export default TakeButton

@@ -1,8 +1,7 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import TaskCard from './TaskCard.refactored'
-import { Task } from '@/lib/store'
 
 interface ColumnProps {
   title: string
@@ -10,6 +9,8 @@ interface ColumnProps {
 }
 
 const Column = memo(function Column({ title, taskIds }: ColumnProps) {
+  const taskCount = useMemo(() => taskIds.length, [taskIds.length])
+
   return (
     <div className="relative p-4 rounded-2xl bg-gray-200 dark:bg-zinc-900 overflow-hidden">
       <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(#888_1px,transparent_1px)] [background-size:18px_18px]" />
@@ -21,7 +22,7 @@ const Column = memo(function Column({ title, taskIds }: ColumnProps) {
           </h2>
 
           <span className="text-xs px-2 py-0.5 rounded-full bg-gray-300 dark:bg-zinc-700">
-            {taskIds.length}
+            {taskCount}
           </span>
         </div>
 

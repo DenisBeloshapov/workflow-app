@@ -1,11 +1,11 @@
 'use client'
 
-import { memo, useCallback } from 'react'
+import { memo, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import TakeButton from './TakeButton.refactored'
 import MoveButton from './MoveButton.refactored'
 import ReturnButton from './ReturnButton.refactored'
-import { useTasksStore, Task } from '@/lib/store'
+import { useTasksStore } from '@/lib/store'
 import { supabase } from '@/lib/supabase'
 
 interface TaskCardProps {
@@ -15,20 +15,18 @@ interface TaskCardProps {
 const TaskCard = memo(function TaskCard({ taskId }: TaskCardProps) {
   const task = useTasksStore((state) => state.getTask(taskId))
   const taskItems = useTasksStore((state) => state.getTaskItems(taskId))
-  const { updateItemOptimistic } = useTasksStore()
 
   if (!task) return null
 
-  const getDepartmentName = (type: string) => {
+  const getDepartmentName = useCallback((type: string) => {
     if (type.includes('payment')) return 'Оплата'
     if (type.includes('registration')) return 'Оформление'
     if (type.includes('passport')) return 'Паспорта'
     return type
-  }
+  }, [])
 
   const markAsPaid = useCallback(
     async (itemId: string) => {
-      // ✅ Optimistic update for item
       useTasksStore.setState((state) => ({
         taskItemsByTaskId: {
           ...state.taskItemsByTaskId,
@@ -50,6 +48,18 @@ const TaskCard = memo(function TaskCard({ taskId }: TaskCardProps) {
     [taskId]
   )
 
+  const priorityColor = useMemo(() => {
+    if (task.priority === 'high') return 'bg-red-500/80 text-white'
+    if (task.priority === 'medium') return 'bg-yellow-400/80 text-white'
+    return 'bg-green-400/80 text-white'
+  }, [task.priority])
+
+  const priorityLabel = useMemo(() => {
+    if (task.priority === 'high') return 'Срочно'
+    if (task.priority === 'medium') return 'Средняя'
+    return 'Низкая'
+  }, [task.priority])
+
   return (
     <motion.div
       layout
@@ -64,21 +74,8 @@ const TaskCard = memo(function TaskCard({ taskId }: TaskCardProps) {
           {task.body_number} {task.client_name}
         </div>
 
-        <div
-          className={
-            'text-xs px-4 py-1.5 rounded-full font-medium ' +
-            (task.priority === 'high'
-              ? 'bg-red-500/80 text-white'
-              : task.priority === 'medium'
-              ? 'bg-yellow-400/80 text-white'
-              : 'bg-green-400/80 text-white')
-          }
-        >
-          {task.priority === 'high'
-            ? 'Срочно'
-            : task.priority === 'medium'
-            ? 'Средняя'
-            : 'Низкая'}
+        <div className={`text-xs px-4 py-1.5 rounded-full font-medium ${priorityColor}`}>
+          {priorityLabel}
         </div>
       </div>
 

@@ -17,7 +17,6 @@ interface RealtimePayload {
  */
 export function useRealtimeSync() {
   const channelRef = useRef<RealtimeChannel | null>(null)
-  const unsubscribeRef = useRef<(() => void) | null>(null)
 
   const {
     addTask,
@@ -34,31 +33,27 @@ export function useRealtimeSync() {
       const { eventType, new: newData, old: oldData } = payload
 
       if (eventType === 'INSERT') {
-        // ✅ Add only the task (without task_items initially)
         const task: Task = {
           ...newData,
           task_items: undefined,
         }
         addTask(task)
       } else if (eventType === 'UPDATE') {
-        // ✅ Patch only changed fields (not full replace)
         updateTask(newData.id, newData)
       } else if (eventType === 'DELETE') {
-        // ✅ Remove task and its items
         deleteTask(oldData.id)
       }
     },
     [addTask, updateTask, deleteTask]
   )
 
-  // ✅ Handle task_items table changes (INSERT, UPDATE, DELETE)
+  // ✅ Handle task_items table changes
   const handleTaskItemsChange = useCallback(
     (payload: RealtimePayload) => {
       const { eventType, new: newData, old: oldData } = payload
 
       if (eventType === 'INSERT') {
-        const item: TaskItem = newData
-        addTaskItem(item)
+        addTaskItem(newData as TaskItem)
       } else if (eventType === 'UPDATE') {
         updateTaskItem(newData.task_id, newData.id, newData)
       } else if (eventType === 'DELETE') {
@@ -68,7 +63,6 @@ export function useRealtimeSync() {
     [addTaskItem, updateTaskItem, deleteTaskItem]
   )
 
-  // ✅ Setup realtime listeners
   const setupRealtimeSync = useCallback(() => {
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current)
@@ -95,7 +89,6 @@ export function useRealtimeSync() {
     channelRef.current = channel
   }, [handleTasksChange, handleTaskItemsChange])
 
-  // ✅ Initialize on mount
   useEffect(() => {
     setupRealtimeSync()
 
@@ -112,7 +105,6 @@ export function useRealtimeSync() {
 
 /**
  * ✅ Optimistic update hook
- * Update locally first, then sync with server
  */
 export function useOptimisticUpdate() {
   const { updateTask, updateTaskItem } = useTasksStore()
@@ -123,16 +115,11 @@ export function useOptimisticUpdate() {
       updates: Partial<Task>,
       dbUpdate: () => Promise<any>
     ) => {
-      // ✅ 1. Update locally FIRST
       updateTask(taskId, updates)
-
-      // ✅ 2. Sync with DB
       try {
         await dbUpdate()
       } catch (error) {
         console.error('Optimistic update failed:', error)
-        // On error, realtime will fetch the latest state
-        // No manual rollback needed
       }
     },
     [updateTask]
@@ -145,22 +132,15 @@ export function useOptimisticUpdate() {
       updates: Partial<TaskItem>,
       dbUpdate: () => Promise<any>
     ) => {
-      // ✅ 1. Update locally FIRST
       updateTaskItem(taskId, itemId, updates)
-
-      // ✅ 2. Sync with DB
       try {
         await dbUpdate()
       } catch (error) {
         console.error('Optimistic item update failed:', error)
-        // Realtime will sync
       }
     },
     [updateTaskItem]
   )
 
-  return {
-    updateTaskOptimistic,
-    updateItemOptimistic,
-  }
+  return { updateTaskOptimistic, updateItemOptimistic }
 }

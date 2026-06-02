@@ -2,7 +2,7 @@
 
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, memo } from 'react'
 import { useOptimisticUpdate } from '@/lib/realtime-sync'
 import { useTasksStore, Task } from '@/lib/store'
 
@@ -12,7 +12,11 @@ interface MoveButtonProps {
   label: string
 }
 
-export default function MoveButton({ taskId, status, label }: MoveButtonProps) {
+const MoveButton = memo(function MoveButton({
+  taskId,
+  status,
+  label,
+}: MoveButtonProps) {
   const [loading, setLoading] = useState(false)
   const { updateTaskOptimistic } = useOptimisticUpdate()
   const task = useTasksStore((state) => state.getTask(taskId))
@@ -22,7 +26,6 @@ export default function MoveButton({ taskId, status, label }: MoveButtonProps) {
     setLoading(true)
 
     try {
-      // ✅ Optimistic update
       await updateTaskOptimistic(
         taskId,
         { status },
@@ -36,13 +39,13 @@ export default function MoveButton({ taskId, status, label }: MoveButtonProps) {
             .single()
 
           if (error || !updated) {
-            alert('Статус задачи был изменен другим пользователем')
-            throw error || new Error('Status changed by another user')
+            throw new Error('Status changed by another user')
           }
         }
       )
     } catch (err) {
       console.error('MOVE ERROR:', err)
+      alert('Ошибка при смене статуса')
     } finally {
       setLoading(false)
     }
@@ -55,4 +58,6 @@ export default function MoveButton({ taskId, status, label }: MoveButtonProps) {
       {loading ? '...' : label}
     </Button>
   )
-}
+})
+
+export default MoveButton
